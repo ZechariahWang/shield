@@ -83,7 +83,7 @@ local function sendShieldStatus(player: Player, status: string, duration: number
 	ShieldChangedRemote:FireClient(player, status, duration, breaks)
 end
 
-local function removeShieldPart(player: Player)
+local function removeShieldPart(player: Player) -- ere
 	local char = player.Character
 	if not char then return end
 	local ff = char:FindFirstChild("PlayerShield")
