@@ -24,6 +24,7 @@ local YELLOW = Color3.fromRGB(255, 159, 80)
 local RED = Color3.fromRGB(255, 25, 0)
 local GREEN = Color3.fromRGB(80, 220, 80)
 local CYAN = Color3.fromRGB(120, 220, 255)
+local CREAM = Color3.fromRGB(255, 245, 220)
 
 local function colorize(color: Color3, text: string): string
 	return string.format(
@@ -79,38 +80,36 @@ local function buildMainText(): string
 	return ""
 end
 
-local function buildSecondaryText(): string
+-- Returns (left, right). Right is only used during Round (the alive count).
+local function buildSecondaryText(): (string, string)
 	if currentPhase == Constants.PHASE_LOBBY then
 		local lobbyCount = countByState(Constants.STATE_LOBBY)
-		return colorize(WHITE, string.format("Players: %d / %d", lobbyCount, Constants.MIN_PLAYERS))
+		return colorize(CREAM, string.format("PLAYERS %d/%d", lobbyCount, Constants.MIN_PLAYERS)), ""
 	elseif currentPhase == Constants.PHASE_INTERMISSION then
 		if phaseEndTime > 0 then
 			local remaining = math.max(0, phaseEndTime - os.time())
-			local color = if remaining <= 3 then RED else WHITE
-			return colorize(color, string.format("Starting in %ds", math.ceil(remaining)))
+			local color = if remaining <= 3 then RED else CREAM
+			return colorize(color, string.format("STARTING IN %d", math.ceil(remaining))), ""
 		end
-		return ""
+		return "", ""
 	elseif currentPhase == Constants.PHASE_REVEAL then
 		if phaseEndTime > 0 then
 			local remaining = math.max(0, phaseEndTime - os.time())
-			return colorize(YELLOW, string.format("Position yourself! %ds", math.ceil(remaining)))
+			return colorize(YELLOW, string.format("POSITION YOURSELF %d", math.ceil(remaining))), ""
 		end
-		return colorize(YELLOW, "Position yourself!")
+		return colorize(YELLOW, "POSITION YOURSELF"), ""
 	elseif currentPhase == Constants.PHASE_ROUND then
-		local parts: { string } = {}
+		local left = ""
 		if phaseEndTime > 0 then
 			local remaining = phaseEndTime - os.time()
-			local color = if remaining <= 30 then RED else WHITE
-			table.insert(parts, colorize(color, formatTime(remaining)))
+			local color = if remaining <= 30 then RED else CREAM
+			left = colorize(color, formatTime(remaining))
 		end
 		local safeCount = countByState(Constants.STATE_SAFE)
 		local totalCount = safeCount + countByState(Constants.STATE_LOBBY)
-		table.insert(parts, colorize(WHITE, string.format("%d/%d", safeCount, totalCount)))
-		return table.concat(parts, "  |  ")
-	elseif currentPhase == Constants.PHASE_END then
-		return ""
+		return left, colorize(CREAM, string.format("ALIVE %d/%d", safeCount, totalCount))
 	end
-	return ""
+	return "", ""
 end
 
 local function resolveLabel(frameName: string, labelName: string, cached: TextLabel?): TextLabel?
@@ -153,10 +152,31 @@ local function updateLoop()
 	end
 
 	if secondaryLabel then
-		local text = buildSecondaryText()
-		if text ~= lastSecondaryText then
-			secondaryLabel.Text = text
-			lastSecondaryText = text
+		local left, right = buildSecondaryText()
+		local pill = secondaryLabel.Parent :: GuiObject
+		local aliveLabel = pill:FindFirstChild("Alive")
+		local divider = pill:FindFirstChild("Divider")
+
+		-- GUI without the Alive chip: fall back to one joined string.
+		if right ~= "" and not (aliveLabel and aliveLabel:IsA("TextLabel")) then
+			left = if left ~= "" then left .. "  |  " .. right else right
+			right = ""
+		end
+
+		local key = left .. "\0" .. right
+		if key ~= lastSecondaryText then
+			lastSecondaryText = key
+			local split = right ~= ""
+			secondaryLabel.Text = left
+			secondaryLabel.Size = UDim2.new(if split then 0.5 else 1, 0, 1, 0)
+			if aliveLabel and aliveLabel:IsA("TextLabel") then
+				aliveLabel.Text = right
+				aliveLabel.Visible = split
+			end
+			if divider and divider:IsA("GuiObject") then
+				divider.Visible = split
+			end
+			pill.Visible = left ~= "" or right ~= ""
 		end
 	end
 end
