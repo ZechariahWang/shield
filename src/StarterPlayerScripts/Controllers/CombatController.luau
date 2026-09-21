@@ -33,81 +33,95 @@ function CombatController.isCombatActive(): boolean
 	return currentPhase == Constants.PHASE_REVEAL or currentPhase == Constants.PHASE_ROUND
 end
 
+type Meter = { fill: GuiObject?, overlay: GuiObject?, tween: Tween? }
+
 local playerGui: PlayerGui
 local container: GuiObject?
-local fillBar: GuiObject?
-local emptyOverlay: GuiObject?
-local meterTween: Tween? = nil
+local shieldMeter: Meter = {}
+local gunMeter: Meter = {}
+
+local function resolveMeter(meter: Meter, name: string)
+	meter.fill = nil
+	meter.overlay = nil
+	if not container then return end
+
+	local frame = container:FindFirstChild(name)
+	if not frame then return end
+	local barBg = frame:FindFirstChild("BarBG")
+	if not barBg then return end
+
+	local fill = barBg:FindFirstChild("Fill")
+	if fill and fill:IsA("GuiObject") then
+		meter.fill = fill
+	end
+	local overlay = barBg:FindFirstChild("EmptyOverlay")
+	if overlay and overlay:IsA("GuiObject") then
+		meter.overlay = overlay
+	end
+end
 
 local function resolveElements()
 	if container and container.Parent then return end
 	container = nil
-	fillBar = nil
-	emptyOverlay = nil
 
 	if not playerGui then return end
 	local gameGui = playerGui:FindFirstChild("Game")
 	if not gameGui then return end
 
-	local fm = gameGui:FindFirstChild("ShieldMeter")
-	if not fm or not fm:IsA("GuiObject") then return end
-	container = fm
-
-	local barBg = fm:FindFirstChild("BarBG")
-	if not barBg then return end
-
-	local fill = barBg:FindFirstChild("Fill")
-	if fill and fill:IsA("GuiObject") then
-		fillBar = fill
+	local actions = gameGui:FindFirstChild("Actions")
+	if actions and actions:IsA("GuiObject") then
+		container = actions
 	end
-	local overlay = barBg:FindFirstChild("EmptyOverlay")
-	if overlay and overlay:IsA("GuiObject") then
-		emptyOverlay = overlay
-	end
+	resolveMeter(shieldMeter, "ShieldMeter")
+	resolveMeter(gunMeter, "GunMeter")
 end
 
-local function cancelMeterTween()
-	if not meterTween then return end
-	meterTween:Cancel()
-	meterTween = nil
-end
+-- Snaps the fill to fromScale, then sweeps it to toScale over duration.
+-- The overlay hides by itself once a refill (toScale == 1) completes.
+local function setMeter(meter: Meter, fromScale: number, toScale: number, duration: number, overlayVisible: boolean)
+	resolveElements()
+	if meter.tween then
+		meter.tween:Cancel()
+		meter.tween = nil
+	end
+	local fill = meter.fill
+	if not fill then return end
+	local overlay = meter.overlay
 
-local function tweenFill(targetScale: number, duration: number)
-	if not fillBar then return end
+	if overlay then overlay.Visible = overlayVisible end
+	if duration <= 0 then
+		fill.Size = UDim2.fromScale(toScale, 1)
+		return
+	end
+
+	fill.Size = UDim2.fromScale(fromScale, 1)
 	local tween = TweenService:Create(
-		fillBar,
+		fill,
 		TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
-		{ Size = UDim2.fromScale(targetScale, 1) }
+		{ Size = UDim2.fromScale(toScale, 1) }
 	)
-	meterTween = tween
+	meter.tween = tween
+	tween.Completed:Connect(function(playbackState)
+		if playbackState ~= Enum.PlaybackState.Completed then return end
+		if toScale == 1 and overlay then
+			overlay.Visible = false
+		end
+	end)
 	tween:Play()
 end
 
 local function applyShieldMeter(status: string, duration: number)
-	resolveElements()
-	cancelMeterTween()
-	if not fillBar then return end
-
 	if status == Constants.SHIELD_UP then
-		fillBar.Size = UDim2.fromScale(1, 1)
-		if emptyOverlay then emptyOverlay.Visible = false end
-		if duration > 0 then
-			tweenFill(0, duration)
-		else
-			fillBar.Size = UDim2.fromScale(0, 1)
-		end
+		setMeter(shieldMeter, 1, 0, duration, false)
 	elseif status == Constants.SHIELD_COOLDOWN_STATUS then
-		fillBar.Size = UDim2.fromScale(0, 1)
-		if emptyOverlay then emptyOverlay.Visible = true end
-		if duration > 0 then
-			tweenFill(1, duration)
-		else
-			fillBar.Size = UDim2.fromScale(1, 1)
-		end
+		setMeter(shieldMeter, 0, 1, duration, true)
 	else
-		fillBar.Size = UDim2.fromScale(1, 1)
-		if emptyOverlay then emptyOverlay.Visible = false end
+		setMeter(shieldMeter, 1, 1, 0, false)
 	end
+end
+
+local function resetGunMeter()
+	setMeter(gunMeter, 1, 1, 0, false)
 end
 
 local function reconcileMeterVisibility()
@@ -159,6 +173,7 @@ local function tryShoot()
 	lastShotAt = now
 	ShootRequestRemote:FireServer(head.Position, direction)
 	shotFiredEvent:Fire()
+	setMeter(gunMeter, 0, 1, Constants.PISTOL_COOLDOWN, true)
 end
 
 local function tryToggleShield()
@@ -177,6 +192,7 @@ function CombatController.init()
 
 	resolveElements()
 	applyShieldMeter(Constants.SHIELD_READY, 0)
+	resetGunMeter()
 	if container then
 		container.Visible = false
 	end
@@ -201,6 +217,7 @@ function CombatController.init()
 
 	RoundStateRemote.OnClientEvent:Connect(function(phase: string)
 		currentPhase = phase
+		resetGunMeter()
 		reconcileMeterVisibility()
 	end)
 
@@ -208,7 +225,7 @@ function CombatController.init()
 		if gameProcessed then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			tryShoot()
-		elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+		elseif input.KeyCode == Enum.KeyCode.E then
 			tryToggleShield()
 		end
 	end)
