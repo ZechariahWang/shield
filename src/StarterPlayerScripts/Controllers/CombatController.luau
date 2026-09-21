@@ -138,8 +138,9 @@ local function getAimDirection(headPosition: Vector3): Vector3?
 	local camera = Workspace.CurrentCamera
 	if not camera then return nil end
 
-	local mouse = UserInputService:GetMouseLocation()
-	local ray = camera:ViewportPointToRay(mouse.X, mouse.Y)
+	-- The cursor is locked to the center during combat, so aim through it.
+	local center = camera.ViewportSize / 2
+	local ray = camera:ViewportPointToRay(center.X, center.Y)
 
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude

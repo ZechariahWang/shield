@@ -45,7 +45,9 @@ local function setActive(on: boolean)
 		localPlayer.CameraMinZoomDistance = Constants.CAMERA_MIN_ZOOM
 		localPlayer.CameraMaxZoomDistance = Constants.CAMERA_MAX_ZOOM
 		UserGameSettings.RotationType = Enum.RotationType.CameraRelative
+		UserInputService.MouseIconEnabled = false
 	else
+		UserInputService.MouseIconEnabled = true
 		localPlayer.CameraMinZoomDistance = stockMinZoom
 		localPlayer.CameraMaxZoomDistance = stockMaxZoom
 		UserGameSettings.RotationType = Enum.RotationType.MovementRelative

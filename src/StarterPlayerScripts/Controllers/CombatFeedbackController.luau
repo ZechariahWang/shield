@@ -3,8 +3,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local SoundService = game:GetService("SoundService")
-local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local CombatController = require(script.Parent.CombatController)
@@ -88,11 +86,11 @@ local function pulseVignette(intensity: number)
 	end)
 end
 
-local CROSSHAIR_IDLE_SIZE = UDim2.fromOffset(4, 4)
-local CROSSHAIR_PUNCH_SIZE = UDim2.fromOffset(10, 10)
-local CROSSHAIR_IDLE_COLOR = Color3.fromRGB(187, 102, 12)
+local CROSSHAIR_IDLE_SIZE = UDim2.fromOffset(6, 6)
+local CROSSHAIR_PUNCH_SIZE = UDim2.fromOffset(12, 12)
+local CROSSHAIR_IDLE_COLOR = Color3.fromRGB(255, 159, 80)
 local CROSSHAIR_PUNCH_COLOR = Color3.fromRGB(255, 80, 30)
-local CROSSHAIR_IDLE_TRANSPARENCY = 0.5
+local CROSSHAIR_IDLE_TRANSPARENCY = 0
 local CROSSHAIR_PUNCH_TRANSPARENCY = 0
 local CROSSHAIR_TWEEN_TIME = 0.12
 
@@ -132,16 +130,10 @@ local function punchCrosshair()
 	):Play()
 end
 
-local function crosshairFollowStep()
-	if not crosshair then return end
-	local mouse = UserInputService:GetMouseLocation()
-	local inset = if screenGui.IgnoreGuiInset then Vector2.zero else GuiService:GetGuiInset()
-	crosshair.Position = UDim2.fromOffset(mouse.X - inset.X, mouse.Y - inset.Y)
-end
-
 local function setCombatMode(active: boolean)
 	resetCrosshair()
 	if crosshair then
+		crosshair.Position = UDim2.fromScale(0.5, 0.5)
 		crosshair.Visible = active
 	end
 end
@@ -399,9 +391,6 @@ function CombatFeedbackController.init()
 	end
 
 	RunService.RenderStepped:Connect(function(dt)
-		if combatModeActive then
-			crosshairFollowStep()
-		end
 		shakeStep(dt)
 		sizzleStep(dt)
 		damageNumberStep(dt)
