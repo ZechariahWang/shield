@@ -13,10 +13,18 @@ local FADE_IN_TIME = 0.25
 local FADE_OUT_TIME = 0.4
 local SLIDE_OFFSET = 80
 
+local KILLER_COLOR = "rgb(255,159,80)"
+local VERB_TRANSPARENCY = 0.4
+
 type Entry = {
+	row: GuiObject,
 	label: TextLabel,
+	stroke: UIStroke?,
+	strip: GuiObject?,
 	removing: boolean,
 	originalTextTransparency: number,
+	originalStrokeTransparency: number,
+	originalStripTransparency: number,
 	originalPosition: UDim2,
 }
 
@@ -31,16 +39,26 @@ local function findGameGui(): ScreenGui?
 	return nil
 end
 
-local function getTemplate(): TextLabel?
+local function getTemplate(): GuiObject?
 	local gui = findGameGui()
 	if not gui then return nil end
 	local idObjects = gui:FindFirstChild("ID_Objects")
 	if not idObjects then return nil end
 	local template = idObjects:FindFirstChild("KillData")
-	if template and template:IsA("TextLabel") then
+	if template and template:IsA("GuiObject") then
 		return template
 	end
 	return nil
+end
+
+local function fade(entry: Entry, tweenInfo: TweenInfo, text: number, stroke: number, strip: number)
+	TweenService:Create(entry.label, tweenInfo, { TextTransparency = text }):Play()
+	if entry.stroke then
+		TweenService:Create(entry.stroke, tweenInfo, { Transparency = stroke }):Play()
+	end
+	if entry.strip then
+		TweenService:Create(entry.strip, tweenInfo, { BackgroundTransparency = strip }):Play()
+	end
 end
 
 local function getFeedFrame(): GuiObject?
@@ -64,36 +82,32 @@ local function removeEntry(entry: Entry)
 		end
 	end
 
-	local label = entry.label
-	if not label or not label.Parent then return end
+	local row = entry.row
+	if not row or not row.Parent then return end
 
+	local tweenInfo = TweenInfo.new(FADE_OUT_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	fade(entry, tweenInfo, 1, 1, 1)
 	local tween = TweenService:Create(
-		label,
-		TweenInfo.new(FADE_OUT_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-		{
-			TextTransparency = 1,
-			Position = entry.originalPosition + UDim2.fromOffset(-SLIDE_OFFSET, 0),
-		}
+		row,
+		tweenInfo,
+		{ Position = entry.originalPosition + UDim2.fromOffset(-SLIDE_OFFSET, 0) }
 	)
 	tween:Play()
 	tween.Completed:Once(function()
-		if label then label:Destroy() end
+		if row then row:Destroy() end
 	end)
 end
 
 local function animateIn(entry: Entry)
-	local label = entry.label
-	label.Position = entry.originalPosition + UDim2.fromOffset(SLIDE_OFFSET, 0)
-	label.TextTransparency = 1
+	local row = entry.row
+	row.Position = entry.originalPosition + UDim2.fromOffset(SLIDE_OFFSET, 0)
+	entry.label.TextTransparency = 1
+	if entry.stroke then entry.stroke.Transparency = 1 end
+	if entry.strip then entry.strip.BackgroundTransparency = 1 end
 
-	TweenService:Create(
-		label,
-		TweenInfo.new(FADE_IN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{
-			Position = entry.originalPosition,
-			TextTransparency = entry.originalTextTransparency,
-		}
-	):Play()
+	local tweenInfo = TweenInfo.new(FADE_IN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	fade(entry, tweenInfo, entry.originalTextTransparency, entry.originalStrokeTransparency, entry.originalStripTransparency)
+	TweenService:Create(row, tweenInfo, { Position = entry.originalPosition }):Play()
 end
 
 local function addEntry(text: string)
@@ -101,16 +115,33 @@ local function addEntry(text: string)
 	local feed = getFeedFrame()
 	if not template or not feed then return end
 
-	local label = template:Clone()
+	local row = template:Clone()
+	local label = row:FindFirstChild("Label")
+	if not label or not label:IsA("TextLabel") then
+		row:Destroy()
+		return
+	end
+	local stroke = label:FindFirstChildOfClass("UIStroke")
+	local strip = row:FindFirstChild("Strip")
+	if strip and not strip:IsA("GuiObject") then
+		strip = nil
+	end
+
+	label.RichText = true
 	label.Text = text
-	label.Visible = true
-	label.Parent = feed
+	row.Visible = true
+	row.Parent = feed
 
 	local entry: Entry = {
+		row = row,
 		label = label,
+		stroke = stroke,
+		strip = strip :: GuiObject?,
 		removing = false,
-		originalTextTransparency = template.TextTransparency,
-		originalPosition = label.Position,
+		originalTextTransparency = label.TextTransparency,
+		originalStrokeTransparency = if stroke then stroke.Transparency else 0,
+		originalStripTransparency = if strip then (strip :: GuiObject).BackgroundTransparency else 1,
+		originalPosition = row.Position,
 	}
 	table.insert(activeEntries, entry)
 
@@ -127,9 +158,15 @@ end
 
 local function formatKillText(killer: string?, victim: string): string
 	if killer and killer ~= "" then
-		return string.format("%s shot %s", killer, victim)
+		return string.format(
+			'<font color="%s">%s</font> <font transparency="%s">shot</font> %s',
+			KILLER_COLOR,
+			string.upper(killer),
+			tostring(VERB_TRANSPARENCY),
+			string.upper(victim)
+		)
 	end
-	return string.format("%s eliminated", victim)
+	return string.format('%s <font transparency="%s">eliminated</font>', string.upper(victim), tostring(VERB_TRANSPARENCY))
 end
 
 function KillFeedController.init()

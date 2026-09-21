@@ -22,8 +22,8 @@ local STACK_DIRECTION = -1
 local STACK_TWEEN_TIME = 0.18
 local MAX_STACK = 5
 
-local LABEL_COLOR = "rgb(255,255,255)"
-local NAME_COLOR = "rgb(255,141,40)"
+local LABEL_COLOR = "rgb(255,245,220)"
+local NAME_COLOR = "rgb(255,159,80)"
 
 local activeBanners: { GuiObject } = {}
 
@@ -53,7 +53,7 @@ local function buildText(victimName: string): string
 		'<font color="%s">ELIMINATED</font> <font color="%s">%s</font>',
 		LABEL_COLOR,
 		NAME_COLOR,
-		victimName
+		string.upper(victimName)
 	)
 end
 
