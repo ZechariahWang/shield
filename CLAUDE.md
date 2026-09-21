@@ -27,7 +27,7 @@ The earlier tag/flamethrower build (burner conversion, stages, fire hazards) liv
 
 ### Client (`src/StarterPlayerScripts/`)
 
-- `Main.client.luau`: bootstrap. Inits `AbilityHUDController`, `DashController`, `UIController`, `KillFeedController`, `KillConfirmController`, `CombatController`, `CombatFeedbackController`, `ChangeIndicatorController` (in that order).
+- `Main.client.luau`: bootstrap. Inits `AbilityHUDController`, `DashController`, `UIController`, `KillFeedController`, `KillConfirmController`, `CombatController`, `CombatFeedbackController`, `ChangeIndicatorController`, `ShopButtonController` (in that order).
 - Players use the **stock Roblox classic camera and free cursor**; no script touches camera mode, mouse behavior, or auto-rotate (they can use Roblox's own Shift Lock if they want). While combat mode is active the crosshair follows the mouse cursor. Aiming is a raycast from the camera through the mouse cursor position.
 - `Controllers/UIController.luau`: reads phase/player-state remotes, renders RichText into `Game.StatusFrame.Status` (main announcements) and the `Game.SecondaryStatus` pill (`Secondary` + `Alive` chips). During `Round`, Status reads "LAST ONE STANDING" and the pill shows `1:30` on the left and `ALIVE 2/3` on the right (`safe/total`, alive count excludes the local player). In other phases the pill shows a single full-width line (`PLAYERS 1/2`, `STARTING IN 5`, `POSITION YOURSELF 8`). At `End`, Status renders the winner banner (1 / 2 / `N PLAYERS SURVIVED!` formats, empty winners falls back to "ROUND ENDED").
 - `Controllers/KillFeedController.luau`: listens to `KillFeed` remote, clones `Game.ID_Objects.KillData` into `Game.Killfeed` per kill, animates entrance/exit (TweenService), maintains a queue. Text is `"<Killer> shot <Victim>"` when there's a killer, `"<Victim> eliminated"` otherwise.
@@ -76,6 +76,12 @@ The `Remotes` folder lives in Studio (not Rojo source); it is preserved across s
 - `Crosshair` (Frame): small reticle that follows the mouse cursor during combat (needs `AnchorPoint = 0.5, 0.5`); punched (size + color tween) by `CombatFeedbackController` on every shot fired.
 - `Ability` (GuiObject): dash ability HUD. Children: `AbilityIcon` (ImageLabel), `AbilityTitle` (TextLabel), `Overlay` (GuiObject swept 1→0 height by `AbilityHUDController.triggerCooldown` across the ability's cooldown). Shown only while the local player is `Safe` during `Round`.
 - `ChangeIndicator` (Frame): elimination banner. Children: `Title` (TextLabel, set to "ELIMINATED") and `UpdatedInfo` (TextLabel, set to "SPECTATING"). Played by `ChangeIndicatorController` when the local player transitions off `Safe` mid-round while other players are still `Safe`.
+
+### Lobby GUI (`PlayerGui.Lobby`, a ScreenGui authored in Studio)
+
+`ResetOnSpawn = false`, so controllers bind to it once.
+
+- `ShopButton` (TextButton): native dark panel with a `UIScale` child and an orange `Accent` bar. `Controllers/ShopButtonController.luau` tweens the `UIScale` and `BackgroundTransparency` for hover/press feedback (tunables at the top of the file). Purely cosmetic: no shop exists yet, so clicking does nothing.
 
 ### Asset templates (`ReplicatedStorage.Assets.UI`)
 
