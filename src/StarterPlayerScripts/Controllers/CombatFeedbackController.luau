@@ -8,6 +8,7 @@ local GuiService = game:GetService("GuiService")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local CombatController = require(script.Parent.CombatController)
+local CameraController = require(script.Parent.CameraController)
 local CombatFeedbackController = {}
 local localPlayer = Players.LocalPlayer
 
@@ -281,15 +282,16 @@ local function shakeStep(dt: number)
 	local hum = getLocalHumanoid()
 	if not hum then return end
 
+	local base = CameraController.getBaseOffset()
 	if shakeIntensity <= 0.001 then
-		if hum.CameraOffset.Magnitude > 0.001 then
-			hum.CameraOffset = Vector3.zero
+		if (hum.CameraOffset - base).Magnitude > 0.001 then
+			hum.CameraOffset = base
 		end
 		return
 	end
 
 	local i = shakeIntensity
-	hum.CameraOffset = Vector3.new(
+	hum.CameraOffset = base + Vector3.new(
 		(math.random() - 0.5) * 2 * i,
 		(math.random() - 0.5) * 2 * i,
 		(math.random() - 0.5) * 2 * i

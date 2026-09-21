@@ -33,6 +33,12 @@ Constants.MOVEMENT_STEP_TIME = 0.18           -- seconds per swing
 Constants.MOVEMENT_TURN_RATE = 14             -- exp-decay rate of HRP yaw toward camera yaw
 Constants.MOVEMENT_GROUND_RAYCAST_DEPTH = 6   -- max stud distance below the ideal foot pos to look for ground
 
+-- COMBAT CAMERA (shoulder view while combat mode is active)
+Constants.CAMERA_SHOULDER_OFFSET = Vector3.new(1.75, 0.5, 0)
+Constants.CAMERA_COMBAT_FOV = 80
+Constants.CAMERA_MIN_ZOOM = 6
+Constants.CAMERA_MAX_ZOOM = 12
+
 -- THIRD-PERSON WEAPON (welded to every player by RoundManager)
 Constants.VIEWMODEL_DEFAULT_WEAPON = "M4A1"
 
