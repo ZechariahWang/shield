@@ -45,7 +45,9 @@ local function resolveMeter(meter: Meter, name: string)
 	meter.overlay = nil
 	if not container then return end
 
-	local frame = container:FindFirstChild(name)
+	local meters = container:FindFirstChild("Meters")
+	if not meters then return end
+	local frame = meters:FindFirstChild(name)
 	if not frame then return end
 	local barBg = frame:FindFirstChild("BarBG")
 	if not barBg then return end

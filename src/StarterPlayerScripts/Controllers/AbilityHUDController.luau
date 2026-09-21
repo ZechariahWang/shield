@@ -37,7 +37,9 @@ local function resolveElements()
 	local gameGui = playerGui:FindFirstChild("Game")
 	if not gameGui then return end
 
-	local ability = gameGui:FindFirstChild("Ability")
+	local actions = gameGui:FindFirstChild("Actions")
+	if not actions then return end
+	local ability = actions:FindFirstChild("AbilityAction")
 	if not ability or not ability:IsA("GuiObject") then return end
 	container = ability
 
