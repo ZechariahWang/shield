@@ -39,6 +39,12 @@ Constants.CAMERA_COMBAT_FOV = 80
 Constants.CAMERA_MIN_ZOOM = 6
 Constants.CAMERA_MAX_ZOOM = 12
 
+-- KILL CAM (victim's camera swings to face the killer after elimination)
+Constants.KILL_CAM_TIME = 3
+Constants.KILL_CAM_DISTANCE = 7
+Constants.KILL_CAM_HEIGHT = 2
+Constants.KILL_CAM_TWEEN_TIME = 0.6
+
 -- THIRD-PERSON WEAPON (welded to every player by RoundManager)
 Constants.VIEWMODEL_DEFAULT_WEAPON = "M4A1"
 
