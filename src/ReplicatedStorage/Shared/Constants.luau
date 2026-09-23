@@ -16,7 +16,6 @@ Constants.PISTOL_DAMAGE = 100             -- one shot eliminates
 Constants.PISTOL_ORIGIN_TOLERANCE = 8     -- studs; max distance between client-reported origin and the head
 Constants.PISTOL_TRACER_LIFETIME = 0.08   -- seconds the tracer part stays in Workspace
 Constants.PISTOL_SHOT_SOUND = "rbxassetid://127604219525464"  -- played at the shooter's head, server side
-Constants.SHIELD_BLOCK_SOUND = "rbxassetid://9116669121"     -- played at the victim's head when a shield absorbs a shot
 Constants.SOUND_CLEANUP_TIME = 3          -- seconds before a one-shot Sound instance is removed
 
 -- SHIELD
@@ -24,6 +23,14 @@ Constants.SHIELD_DURATIONS = { 1.0, 0.5, 0.25 } -- active seconds; index = 1 + b
 Constants.SHIELD_COOLDOWN = 3.0           -- after natural expiry or manual lower. A break has no cooldown.
 Constants.SHIELD_CHAIN_RESET = 5.0        -- seconds since the last break before the chain resets to full duration
 Constants.SHIELD_WALKSPEED = 12           -- while the shield is up
+Constants.SHIELD_SIZE = 8                 -- diameter (studs) of the bubble welded to the root part
+Constants.SHIELD_COLOR = Color3.fromRGB(0, 210, 255)
+Constants.SHIELD_TRANSPARENCY = 0.25
+Constants.SHIELD_BREAK_FX_TIME = 0.25     -- seconds the shattered bubble takes to swell and fade
+Constants.SHIELD_BREAK_FX_SCALE = 1.4
+Constants.SHIELD_RAISE_SOUND = "rbxassetid://102387902167220"  -- all shield sounds play at the owner's head, server side
+Constants.SHIELD_LOWER_SOUND = "rbxassetid://130860293177595"  -- natural expiry and manual lower
+Constants.SHIELD_BREAK_SOUND = "rbxassetid://132492701741331"  -- a shot landed on the raised shield
 
 -- MOVEMENT
 Constants.SAFE_WALKSPEED = 16

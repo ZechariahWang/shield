@@ -2,6 +2,7 @@ local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
@@ -83,13 +84,71 @@ local function sendShieldStatus(player: Player, status: string, duration: number
 	ShieldChangedRemote:FireClient(player, status, duration, breaks)
 end
 
-local function removeShieldPart(player: Player) -- ere
+local function getHead(player: Player): BasePart?
 	local char = player.Character
-	if not char then return end
-	local ff = char:FindFirstChild("PlayerShield")
-	if ff then
-		ff:Destroy()
+	if not char then return nil end
+	return char:FindFirstChild("Head") :: BasePart?
+end
+
+local function playSoundAt(part: BasePart?, soundId: string)
+	if not part or soundId == "" then return end
+	local sound = Instance.new("Sound")
+	sound.SoundId = soundId
+	sound.Parent = part
+	sound:Play()
+	Debris:AddItem(sound, Constants.SOUND_CLEANUP_TIME)
+end
+
+local function getShieldPart(player: Player): BasePart?
+	local char = player.Character
+	if not char then return nil end
+	return char:FindFirstChild("PlayerShield") :: BasePart?
+end
+
+local function removeShieldPart(player: Player)
+	local part = getShieldPart(player)
+	if part then
+		part:Destroy()
 	end
+end
+
+-- Server-created, so it replicates on its own. CanQuery stays on so shots hit the bubble itself.
+local function createShieldPart(char: Model)
+	local root = char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not root then return end
+
+	local part = Instance.new("Part")
+	part.Name = "PlayerShield"
+	part.Shape = Enum.PartType.Ball
+	part.Size = Vector3.one * Constants.SHIELD_SIZE
+	part.Material = Enum.Material.ForceField
+	part.Color = Constants.SHIELD_COLOR
+	part.Transparency = Constants.SHIELD_TRANSPARENCY
+	part.CanCollide = false
+	part.CanTouch = false
+	part.Massless = true
+	part.CastShadow = false
+	part.CFrame = root.CFrame
+
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = root
+	weld.Part1 = part
+	weld.Parent = part
+
+	part.Parent = char
+end
+
+local function spawnBreakEffect(shieldPart: BasePart)
+	local fx = shieldPart:Clone()
+	fx:ClearAllChildren()
+	fx.Name = "ShieldBreakFx"
+	fx.Anchored = true
+	fx.CanQuery = false
+	fx.Parent = Workspace
+
+	local info = TweenInfo.new(Constants.SHIELD_BREAK_FX_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenService:Create(fx, info, { Size = fx.Size * Constants.SHIELD_BREAK_FX_SCALE, Transparency = 1 }):Play()
+	Debris:AddItem(fx, Constants.SHIELD_BREAK_FX_TIME + 0.1)
 end
 
 local function shieldDurationFor(breaks: number): number
@@ -118,10 +177,8 @@ local function raiseShield(player: Player)
 	local duration = shieldDurationFor(s.breaksInChain)
 
 	removeShieldPart(player)
-	local ff = Instance.new("ForceField")
-	ff.Name = "PlayerShield"
-	ff.Visible = true
-	ff.Parent = char
+	createShieldPart(char)
+	playSoundAt(getHead(player), Constants.SHIELD_RAISE_SOUND)
 
 	hum.WalkSpeed = Constants.SHIELD_WALKSPEED
 
@@ -138,6 +195,7 @@ local function lowerShield(player: Player, withCooldown: boolean)
 	if not s.up then return end
 
 	removeShieldPart(player)
+	playSoundAt(getHead(player), Constants.SHIELD_LOWER_SOUND)
 	setWalkSpeed(player, Constants.SAFE_WALKSPEED)
 	s.up = false
 	s.expiresAt = 0
@@ -154,6 +212,10 @@ end
 local function breakShield(victim: Player, shooter: Player)
 	local s = getState(victim)
 
+	local part = getShieldPart(victim)
+	if part then
+		spawnBreakEffect(part)
+	end
 	removeShieldPart(victim)
 	setWalkSpeed(victim, Constants.SAFE_WALKSPEED)
 	s.up = false
@@ -163,7 +225,7 @@ local function breakShield(victim: Player, shooter: Player)
 	s.lastBreakAt = os.clock()
 
 	sendShieldStatus(victim, Constants.SHIELD_READY, 0, s.breaksInChain)
-	playSoundAt(getHead(victim), Constants.SHIELD_BLOCK_SOUND)
+	playSoundAt(getHead(victim), Constants.SHIELD_BREAK_SOUND)
 
 	if ShotBlockedRemote then
 		ShotBlockedRemote:FireClient(shooter, victim)
@@ -174,21 +236,6 @@ end
 local function clearShieldSilently(player: Player)
 	removeShieldPart(player)
 	shields[player] = newShieldState()
-end
-
-local function playSoundAt(part: BasePart?, soundId: string)
-	if not part or soundId == "" then return end
-	local sound = Instance.new("Sound")
-	sound.SoundId = soundId
-	sound.Parent = part
-	sound:Play()
-	Debris:AddItem(sound, Constants.SOUND_CLEANUP_TIME)
-end
-
-local function getHead(player: Player): BasePart?
-	local char = player.Character
-	if not char then return nil end
-	return char:FindFirstChild("Head") :: BasePart?
 end
 
 local function spawnTracer(origin: Vector3, endPoint: Vector3)
