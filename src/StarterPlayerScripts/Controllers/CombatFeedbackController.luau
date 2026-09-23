@@ -3,10 +3,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local SoundService = game:GetService("SoundService")
+local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local CombatController = require(script.Parent.CombatController)
-local CameraController = require(script.Parent.CameraController)
 local CombatFeedbackController = {}
 local localPlayer = Players.LocalPlayer
 
@@ -124,10 +125,22 @@ local function punchCrosshair()
 	):Play()
 end
 
+local function getLocalHumanoid(): Humanoid?
+	local char = localPlayer.Character
+	if not char then return nil end
+	return char:FindFirstChildOfClass("Humanoid")
+end
+
+local function crosshairFollowStep()
+	if not crosshair then return end
+	local mouse = UserInputService:GetMouseLocation()
+	local inset = if screenGui.IgnoreGuiInset then Vector2.zero else GuiService:GetGuiInset()
+	crosshair.Position = UDim2.fromOffset(mouse.X - inset.X, mouse.Y - inset.Y)
+end
+
 local function setCombatMode(active: boolean)
 	resetCrosshair()
 	if crosshair then
-		crosshair.Position = UDim2.fromScale(0.5, 0.5)
 		crosshair.Visible = active
 	end
 end
@@ -265,20 +278,22 @@ local function shake(intensity: number)
 end
 
 local function shakeStep(dt: number)
+	local hum = getLocalHumanoid()
+	if not hum then return end
+
 	if shakeIntensity <= 0.001 then
-		if shakeIntensity > 0 then
-			shakeIntensity = 0
-			CameraController.setShake(Vector3.zero)
+		if hum.CameraOffset.Magnitude > 0.001 then
+			hum.CameraOffset = Vector3.zero
 		end
 		return
 	end
 
 	local i = shakeIntensity
-	CameraController.setShake(Vector3.new(
+	hum.CameraOffset = Vector3.new(
 		(math.random() - 0.5) * 2 * i,
 		(math.random() - 0.5) * 2 * i,
 		(math.random() - 0.5) * 2 * i
-	))
+	)
 
 	shakeIntensity = math.max(0, shakeIntensity - SHAKE_DECAY * dt)
 end
@@ -382,6 +397,9 @@ function CombatFeedbackController.init()
 	end
 
 	RunService.RenderStepped:Connect(function(dt)
+		if combatModeActive then
+			crosshairFollowStep()
+		end
 		shakeStep(dt)
 		sizzleStep(dt)
 		damageNumberStep(dt)

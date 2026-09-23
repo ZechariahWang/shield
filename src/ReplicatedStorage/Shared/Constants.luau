@@ -40,26 +40,6 @@ Constants.MOVEMENT_STEP_TIME = 0.18           -- seconds per swing
 Constants.MOVEMENT_TURN_RATE = 14             -- exp-decay rate of HRP yaw toward camera yaw
 Constants.MOVEMENT_GROUND_RAYCAST_DEPTH = 6   -- max stud distance below the ideal foot pos to look for ground
 
--- COMBAT CAMERA (scriptable shoulder view while combat mode is active)
-Constants.CAMERA_SHOULDER_OFFSET = Vector3.new(1.75, 0.5, 0) -- camera space: right, up, back
-Constants.CAMERA_FOCUS_HEIGHT = 1.5           -- studs above the root part the camera orbits
-Constants.CAMERA_COMBAT_FOV = 80
-Constants.CAMERA_MIN_ZOOM = 6
-Constants.CAMERA_MAX_ZOOM = 12
-Constants.CAMERA_DEFAULT_ZOOM = 8
-Constants.CAMERA_ZOOM_STEP = 1                -- studs per mouse wheel notch
-Constants.CAMERA_SENSITIVITY_X = 0.0065       -- radians per pixel, multiplied by the user's mouse sensitivity setting (matches the stock camera)
-Constants.CAMERA_SENSITIVITY_Y = 0.005
-Constants.CAMERA_PITCH_MIN = -60              -- degrees
-Constants.CAMERA_PITCH_MAX = 75
-Constants.CAMERA_ROTATION_SMOOTHING = 30      -- exp-decay rates: higher is snappier
-Constants.CAMERA_FOLLOW_SMOOTHING = 14
-Constants.CAMERA_ZOOM_SMOOTHING = 6           -- easing back out after an obstacle
-Constants.CAMERA_OCCLUSION_IN_RATE = 40       -- pulling in toward an obstacle
-Constants.CAMERA_FOV_SMOOTHING = 8
-Constants.CAMERA_OCCLUSION_PADDING = 0.5      -- studs kept between the camera and the wall behind it
-Constants.CAMERA_OCCLUSION_MIN_DISTANCE = 1
-
 -- KILL CAM (victim's camera swings to face the killer after elimination)
 Constants.KILL_CAM_TIME = 3
 Constants.KILL_CAM_DISTANCE = 7
