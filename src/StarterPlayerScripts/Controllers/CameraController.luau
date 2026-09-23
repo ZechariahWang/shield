@@ -109,9 +109,9 @@ end
 local function onInputChanged(input: InputObject, gameProcessed: boolean)
 	if not active then return end
 	if input.UserInputType == Enum.UserInputType.MouseMovement then
-		local sensitivity = Constants.CAMERA_SENSITIVITY * UserGameSettings.MouseSensitivity
-		yaw -= input.Delta.X * sensitivity
-		pitch = math.clamp(pitch - input.Delta.Y * sensitivity, PITCH_MIN, PITCH_MAX)
+		local userScale = UserGameSettings.MouseSensitivity
+		yaw -= input.Delta.X * Constants.CAMERA_SENSITIVITY_X * userScale
+		pitch = math.clamp(pitch - input.Delta.Y * Constants.CAMERA_SENSITIVITY_Y * userScale, PITCH_MIN, PITCH_MAX)
 	elseif input.UserInputType == Enum.UserInputType.MouseWheel and not gameProcessed then
 		zoom = math.clamp(zoom - input.Position.Z * Constants.CAMERA_ZOOM_STEP, Constants.CAMERA_MIN_ZOOM, Constants.CAMERA_MAX_ZOOM)
 	end
