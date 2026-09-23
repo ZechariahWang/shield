@@ -94,12 +94,6 @@ local CROSSHAIR_IDLE_TRANSPARENCY = 0
 local CROSSHAIR_PUNCH_TRANSPARENCY = 0
 local CROSSHAIR_TWEEN_TIME = 0.12
 
-local function getLocalHumanoid(): Humanoid?
-	local char = localPlayer.Character
-	if not char then return nil end
-	return char:FindFirstChildOfClass("Humanoid")
-end
-
 local localState: string = Constants.STATE_LOBBY
 local combatModeActive = false
 local currentPhase: string = Constants.PHASE_LOBBY
@@ -271,23 +265,20 @@ local function shake(intensity: number)
 end
 
 local function shakeStep(dt: number)
-	local hum = getLocalHumanoid()
-	if not hum then return end
-
-	local base = CameraController.getBaseOffset()
 	if shakeIntensity <= 0.001 then
-		if (hum.CameraOffset - base).Magnitude > 0.001 then
-			hum.CameraOffset = base
+		if shakeIntensity > 0 then
+			shakeIntensity = 0
+			CameraController.setShake(Vector3.zero)
 		end
 		return
 	end
 
 	local i = shakeIntensity
-	hum.CameraOffset = base + Vector3.new(
+	CameraController.setShake(Vector3.new(
 		(math.random() - 0.5) * 2 * i,
 		(math.random() - 0.5) * 2 * i,
 		(math.random() - 0.5) * 2 * i
-	)
+	))
 
 	shakeIntensity = math.max(0, shakeIntensity - SHAKE_DECAY * dt)
 end
