@@ -61,7 +61,14 @@ Constants.KILL_CAM_HEIGHT = 2
 Constants.KILL_CAM_TWEEN_TIME = 0.6
 
 -- THIRD-PERSON WEAPON (welded to every player by RoundManager)
-Constants.VIEWMODEL_DEFAULT_WEAPON = "M4A1"
+Constants.VIEWMODEL_DEFAULT_WEAPON = "Pistol"
+-- Grip CFrame (Right Arm space -> weapon primary part) for weapons without a
+-- ThirdPersonRigs entry. The Pistol's Frame points +X toward the barrel and +Y
+-- up; this maps that to the arm's -Y (forward when raised) and -Z, with the
+-- magazine sitting in the hand.
+Constants.WEAPON_GRIPS = {
+	Pistol = CFrame.new(0, -0.99, 0.09, 0, 0, 1, -1, 0, 0, 0, -1, 0),
+}
 
 -- DASH
 Constants.DASH_COOLDOWN = 3

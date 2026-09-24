@@ -141,7 +141,7 @@ Players are **never killed** in the Roblox sense. When a `Safe` player's HP reac
 
 ## Visual identity
 
-- **Third-person weapon**: `RoundManager.setSafe` welds a clone of `ReplicatedStorage.Weapons.<VIEWMODEL_DEFAULT_WEAPON>` (named `EquippedWeapon`) onto the character's right arm via a `Motor6D`, using the grip `CFrame` and motor name read from the matching rig under `ReplicatedStorage.ThirdPersonRigs` (falls back to identity + `"Weapon"` if the rig/motor isn't found). `setLobby` and round end both detach it.
+- **Third-person weapon**: `RoundManager.setSafe` welds a clone of `ReplicatedStorage.Weapons.<VIEWMODEL_DEFAULT_WEAPON>` (`Pistol`; named `EquippedWeapon`) onto the character's right arm via a `Motor6D`, using the grip `CFrame` and motor name read from the matching rig under `ReplicatedStorage.ThirdPersonRigs`. Without a rig it uses `Constants.WEAPON_GRIPS[name]` (identity if absent) + `"Weapon"`. Every other part in the model is welded to the primary part with its authored offset, so a weapon authored as loose parts (the Pistol) holds together. Convention: the weapon's forward axis runs down the arm's -Y, its top faces the arm's -Z, and the grip sits about 0.72 studs below the arm center. `setLobby` and round end both detach it.
 - **Shield**: the cyan `PlayerShield` bubble is the only visual: see Shield above. No outline/highlight system exists in this mode (there's no "who's the burner" to call out; everyone looks the same).
 
 ## Map Authoring

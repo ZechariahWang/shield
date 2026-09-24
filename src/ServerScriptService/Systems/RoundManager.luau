@@ -44,20 +44,22 @@ end
 
 -- Read the grip CFrame and motor name from the third-person rig's Right-Arm motor.
 -- This lets the user author the grip in Studio (via the rig's pre-rigged weapon)
--- and have it pick up automatically. Falls back to identity + "Weapon" if missing.
+-- and have it pick up automatically. Without a rig, falls back to
+-- Constants.WEAPON_GRIPS[weaponName] (identity if absent) + "Weapon".
 local function extractTPGrip(weaponName: string): (CFrame, string)
+	local fallbackGrip = Constants.WEAPON_GRIPS[weaponName] or CFrame.new()
 	local rigsFolder = ReplicatedStorage:FindFirstChild("ThirdPersonRigs")
-	if not rigsFolder then return CFrame.new(), "Weapon" end
+	if not rigsFolder then return fallbackGrip, "Weapon" end
 	local rig = rigsFolder:FindFirstChild(weaponName)
-	if not rig or not rig:IsA("Model") then return CFrame.new(), "Weapon" end
+	if not rig or not rig:IsA("Model") then return fallbackGrip, "Weapon" end
 	local rightArm = rig:FindFirstChild("Right Arm")
-	if not rightArm then return CFrame.new(), "Weapon" end
+	if not rightArm then return fallbackGrip, "Weapon" end
 	for _, m in ipairs(rig:GetDescendants()) do
 		if m:IsA("Motor6D") and m.Part0 == rightArm and m.Part1 then
 			return m.C0, m.Name
 		end
 	end
-	return CFrame.new(), "Weapon"
+	return fallbackGrip, "Weapon"
 end
 
 -- Attach / detach the third-person weapon model on the player's character.
@@ -97,6 +99,9 @@ local function applyTPWeapon(player: Player, on: boolean)
 	end
 	clone.PrimaryPart = primary
 
+	-- Weld every part to the primary with its authored offset so models built from
+	-- loose parts hold together. An explicit C0 avoids WeldConstraint capturing the
+	-- offset after the Motor6D has already snapped the primary to the arm.
 	for _, d in ipairs(clone:GetDescendants()) do
 		if d:IsA("BasePart") then
 			d.Anchored = false
@@ -104,6 +109,13 @@ local function applyTPWeapon(player: Player, on: boolean)
 			d.CanQuery = false
 			d.CanTouch = false
 			d.Massless = true
+			if d ~= primary then
+				local weld = Instance.new("Weld")
+				weld.Part0 = primary
+				weld.Part1 = d
+				weld.C0 = primary.CFrame:ToObjectSpace(d.CFrame)
+				weld.Parent = d
+			end
 		end
 	end
 
