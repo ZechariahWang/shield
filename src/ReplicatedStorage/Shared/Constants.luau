@@ -85,6 +85,12 @@ Constants.WEAPON_GRIPS = {
 	Pistol = CFrame.new(0, -0.99, 0.09, 0, 0, 1, -1, 0, 0, 0, -1, 0),
 }
 
+-- SHOP (weapon skins bought with coins; per-ability tunables live in Shared/Abilities.luau)
+Constants.SHOP_STARTING_COINS = 0
+Constants.SHOP_COINS_PER_KILL = 25
+Constants.SHOP_COINS_PER_WIN = 100
+Constants.SHOP_DEFAULT_WEAPON_PRICE = 200   -- used when a weapon model has no Price attribute
+
 -- PLAYER STATES
 Constants.STATE_LOBBY = "Lobby"     -- also used for eliminated players (spectating from the lobby)
 Constants.STATE_SAFE = "Safe"       -- alive in the arena
