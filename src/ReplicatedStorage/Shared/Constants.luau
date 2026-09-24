@@ -42,12 +42,24 @@ Constants.SHIELD_COLOR = Color3.fromRGB(0, 210, 255)
 Constants.SHIELD_TRANSPARENCY = 0.25
 Constants.SHIELD_BREAK_FX_TIME = 0.25     -- seconds the shattered bubble takes to swell and fade
 Constants.SHIELD_BREAK_FX_SCALE = 1.4
+Constants.SHIELD_BREAK_PARTICLES = 28     -- shard burst count on a break
+Constants.SHIELD_BREAK_RING_SIZE = 18     -- studs the ground ring expands to
+Constants.SHIELD_BREAK_RING_TIME = 0.35
+Constants.SHIELD_RAISE_FX_TIME = 0.2      -- bubble pops in from SHIELD_RAISE_FX_START scale with a Back overshoot
+Constants.SHIELD_RAISE_FX_START = 0.3
+Constants.SHIELD_LOWER_FX_TIME = 0.15     -- bubble shrinks to SHIELD_LOWER_FX_SCALE and fades on lower/expiry
+Constants.SHIELD_LOWER_FX_SCALE = 0.5
 Constants.SHIELD_RAISE_SOUND = "rbxassetid://102387902167220"  -- all shield sounds play at the owner's head, server side
 Constants.SHIELD_LOWER_SOUND = "rbxassetid://130860293177595"  -- natural expiry and manual lower
 Constants.SHIELD_BREAK_SOUND = "rbxassetid://132492701741331"  -- a shot landed on the raised shield
 
 -- MOVEMENT
 Constants.SAFE_WALKSPEED = 16
+Constants.SPRINT_WALKSPEED = 24           -- hold Shift during combat; blocked while the shield is up
+Constants.CAMERA_FOV = 70
+Constants.SPRINT_FOV = 82
+Constants.SPRINT_FOV_TWEEN_TIME = 0.25
+Constants.SHIFTLOCK_CAMERA_OFFSET = Vector3.new(1.75, 0, 0) -- stock shift-lock shoulder offset, applied during combat
 Constants.MOVEMENT_STRIDE_LENGTH = 1.6        -- studs of horizontal foot drift before a swing fires
 Constants.MOVEMENT_STEP_HEIGHT = 0.55         -- peak vertical arc of a swinging foot
 Constants.MOVEMENT_STEP_TIME = 0.18           -- seconds per swing
