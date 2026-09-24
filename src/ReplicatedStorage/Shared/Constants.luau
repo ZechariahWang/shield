@@ -89,7 +89,8 @@ Constants.WEAPON_GRIPS = {
 Constants.SHOP_STARTING_COINS = 0
 Constants.SHOP_COINS_PER_KILL = 25
 Constants.SHOP_COINS_PER_WIN = 100
-Constants.SHOP_DEFAULT_WEAPON_PRICE = 200   -- used when a weapon model has no Price attribute
+Constants.SHOP_DEFAULT_PRICE = 200   -- used when a weapon model or ability folder has no Price attribute
+Constants.SHOP_DEFAULT_ABILITY = "Dash"  -- owned by everyone; the only ability with behavior
 
 -- PLAYER STATES
 Constants.STATE_LOBBY = "Lobby"     -- also used for eliminated players (spectating from the lobby)

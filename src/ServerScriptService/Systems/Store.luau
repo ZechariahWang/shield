@@ -3,18 +3,27 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 
--- ponytail: session only. Coins, owned weapons and the equipped weapon reset on
--- rejoin; back this table with a DataStore once purchases need to persist.
-local WeaponStore = {}
+-- ponytail: session only. Coins, owned items and the equipped weapon reset on
+-- rejoin; back the wallets table with a DataStore once purchases need to persist.
+local Store = {}
+
+Store.KIND_WEAPON = "Weapon"
+Store.KIND_ABILITY = "Ability"
 
 type Wallet = {
 	coins: IntValue,
-	owned: { [string]: boolean },
-	equipped: string,
+	ownedWeapons: { [string]: boolean },
+	equippedWeapon: string,
+	ownedAbilities: { [string]: boolean },
 }
 
 local wallets: { [Player]: Wallet } = {}
 local ShopStateRemote: RemoteEvent
+
+local CATALOG_FOLDERS = {
+	[Store.KIND_WEAPON] = "Weapons",
+	[Store.KIND_ABILITY] = "Abilities",
+}
 
 local function ensureRemote(parent: Instance, name: string): RemoteEvent
 	local existing = parent:FindFirstChild(name)
@@ -27,34 +36,42 @@ local function ensureRemote(parent: Instance, name: string): RemoteEvent
 	return remote
 end
 
-local function weaponTemplate(name: string): Model?
-	local folder = ReplicatedStorage:FindFirstChild("Weapons")
+local function catalogItem(kind: string, name: string): Instance?
+	local folderName = CATALOG_FOLDERS[kind]
+	if not folderName then return nil end
+	local folder = ReplicatedStorage:FindFirstChild(folderName)
 	if not folder then return nil end
-	local model = folder:FindFirstChild(name)
-	if model and model:IsA("Model") then
-		return model
-	end
-	return nil
+	return folder:FindFirstChild(name)
 end
 
-function WeaponStore.price(name: string): number
-	local model = weaponTemplate(name)
-	if not model then return 0 end
-	local price = model:GetAttribute("Price")
+function Store.price(kind: string, name: string): number
+	local item = catalogItem(kind, name)
+	if not item then return 0 end
+	local price = item:GetAttribute("Price")
 	if typeof(price) == "number" then
 		return price
 	end
-	return Constants.SHOP_DEFAULT_WEAPON_PRICE
+	return Constants.SHOP_DEFAULT_PRICE
+end
+
+local function names(set: { [string]: boolean }): { string }
+	local list: { string } = {}
+	for name in set do
+		table.insert(list, name)
+	end
+	return list
 end
 
 local function sendState(player: Player)
 	local wallet = wallets[player]
 	if not wallet then return end
-	local owned: { string } = {}
-	for name in wallet.owned do
-		table.insert(owned, name)
-	end
-	ShopStateRemote:FireClient(player, wallet.coins.Value, owned, wallet.equipped)
+	ShopStateRemote:FireClient(
+		player,
+		wallet.coins.Value,
+		names(wallet.ownedWeapons),
+		wallet.equippedWeapon,
+		names(wallet.ownedAbilities)
+	)
 end
 
 local function onPlayerAdded(player: Player)
@@ -69,47 +86,57 @@ local function onPlayerAdded(player: Player)
 
 	wallets[player] = {
 		coins = coins,
-		owned = { [Constants.VIEWMODEL_DEFAULT_WEAPON] = true },
-		equipped = Constants.VIEWMODEL_DEFAULT_WEAPON,
+		ownedWeapons = { [Constants.VIEWMODEL_DEFAULT_WEAPON] = true },
+		equippedWeapon = Constants.VIEWMODEL_DEFAULT_WEAPON,
+		ownedAbilities = { [Constants.SHOP_DEFAULT_ABILITY] = true },
 	}
 	sendState(player)
 end
 
-function WeaponStore.equipped(player: Player): string
+function Store.equipped(player: Player): string
 	local wallet = wallets[player]
 	if not wallet then return Constants.VIEWMODEL_DEFAULT_WEAPON end
-	return wallet.equipped
+	return wallet.equippedWeapon
 end
 
-function WeaponStore.addCoins(player: Player, amount: number)
+function Store.addCoins(player: Player, amount: number)
 	local wallet = wallets[player]
 	if not wallet then return end
 	wallet.coins.Value += amount
 	sendState(player)
 end
 
-local function purchase(player: Player, name: any)
+local function ownedSet(wallet: Wallet, kind: string): { [string]: boolean }?
+	if kind == Store.KIND_WEAPON then return wallet.ownedWeapons end
+	if kind == Store.KIND_ABILITY then return wallet.ownedAbilities end
+	return nil
+end
+
+local function purchase(player: Player, kind: any, name: any)
 	local wallet = wallets[player]
-	if not wallet or typeof(name) ~= "string" then return end
-	if not weaponTemplate(name) then return end
-	if wallet.owned[name] then return end
-	local price = WeaponStore.price(name)
+	if not wallet or typeof(kind) ~= "string" or typeof(name) ~= "string" then return end
+	local owned = ownedSet(wallet, kind)
+	if not owned or not catalogItem(kind, name) then return end
+	if owned[name] then return end
+	local price = Store.price(kind, name)
 	if wallet.coins.Value < price then return end
 	wallet.coins.Value -= price
-	wallet.owned[name] = true
-	wallet.equipped = name
+	owned[name] = true
+	if kind == Store.KIND_WEAPON then
+		wallet.equippedWeapon = name
+	end
 	sendState(player)
 end
 
 local function equip(player: Player, name: any)
 	local wallet = wallets[player]
 	if not wallet or typeof(name) ~= "string" then return end
-	if not wallet.owned[name] then return end
-	wallet.equipped = name
+	if not wallet.ownedWeapons[name] then return end
+	wallet.equippedWeapon = name
 	sendState(player)
 end
 
-function WeaponStore.init()
+function Store.init()
 	local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 	ShopStateRemote = ensureRemote(Remotes, "ShopState")
 	local purchaseRemote = ensureRemote(Remotes, "ShopPurchase")
@@ -129,4 +156,4 @@ function WeaponStore.init()
 	end)
 end
 
-return WeaponStore
+return Store

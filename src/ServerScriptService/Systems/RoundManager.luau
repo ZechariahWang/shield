@@ -8,7 +8,7 @@ local CombatSystem = require(script.Parent.CombatSystem)
 local AbilitySystem = require(script.Parent.AbilitySystem)
 local MapManager = require(script.Parent.MapManager)
 local BotSystem = require(script.Parent.BotSystem)
-local WeaponStore = require(script.Parent.WeaponStore)
+local Store = require(script.Parent.Store)
 
 local RoundManager = {}
 
@@ -85,7 +85,7 @@ local function applyTPWeapon(player: Player, on: boolean)
 	if not on then return end
 	if not rightArm then return end
 
-	local weaponName = WeaponStore.equipped(player)
+	local weaponName = Store.equipped(player)
 	local weaponsFolder = ReplicatedStorage:FindFirstChild("Weapons")
 	if not weaponsFolder then return end
 	local template = weaponsFolder:FindFirstChild(weaponName)
@@ -167,7 +167,7 @@ local function endRound(reason: string, winners: { string })
 	for _, name in winners do
 		local winner = Players:FindFirstChild(name)
 		if winner and winner:IsA("Player") then
-			WeaponStore.addCoins(winner, Constants.SHOP_COINS_PER_WIN)
+			Store.addCoins(winner, Constants.SHOP_COINS_PER_WIN)
 		end
 	end
 
@@ -346,7 +346,7 @@ local function onPlayerEliminated(victim: Model, killer: Model?)
 
 	local killerPlayer = if killer then Players:GetPlayerFromCharacter(killer) else nil
 	if killerPlayer then
-		WeaponStore.addCoins(killerPlayer, Constants.SHOP_COINS_PER_KILL)
+		Store.addCoins(killerPlayer, Constants.SHOP_COINS_PER_KILL)
 	end
 
 	local victimPlayer = Players:GetPlayerFromCharacter(victim)

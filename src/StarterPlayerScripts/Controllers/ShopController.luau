@@ -6,7 +6,7 @@ local Constants = require(ReplicatedStorage.Shared.Constants)
 
 local ShopController = {}
 
--- Shop button feedback
+-- Lobby button feedback
 local TWEEN_INFO = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local IDLE_SCALE = 1
 local HOVER_SCALE = 1.05
@@ -14,7 +14,7 @@ local PRESS_SCALE = 0.95
 local IDLE_TRANSPARENCY = 0.25
 local HOVER_TRANSPARENCY = 0.05
 
--- Modal look (matches the Studio-authored ShopButton)
+-- Modal look (matches the Studio-authored lobby buttons)
 local FONT = Font.new("rbxasset://fonts/families/Roboto.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic)
 local PANEL_COLOR = Color3.fromRGB(20, 12, 8)
 local CARD_COLOR = Color3.fromRGB(34, 22, 14)
@@ -28,58 +28,72 @@ local CARD_PADDING = UDim2.fromScale(0.02, 0.03)
 -- Weapon preview camera
 local PREVIEW_FOV = 40
 local PREVIEW_DISTANCE = 1.15 -- multiples of the model's bounding-box diagonal
-local PREVIEW_TILT = 0.35    -- 0 = pure side profile, higher = more three-quarter view
+local PREVIEW_TILT = 0.35     -- 0 = pure side profile, higher = more three-quarter view
 
-local hovering = false
-local pressing = false
+local KIND_WEAPON = "Weapon"
+local KIND_ABILITY = "Ability"
+local KINDS = { KIND_WEAPON, KIND_ABILITY }
+local TAB_TITLES = { [KIND_WEAPON] = "WEAPONS", [KIND_ABILITY] = "ABILITIES" }
+local CATALOG_FOLDERS = { [KIND_WEAPON] = "Weapons", [KIND_ABILITY] = "Abilities" }
+
+local MODE_SHOP = "Shop"
+local MODE_INVENTORY = "Inventory"
+
+type Item = { kind: string, name: string, template: Instance }
+type Card = { item: Item, frame: Frame, price: TextLabel, action: TextButton, cost: number }
+type Modal = {
+	mode: string,
+	frame: Frame,
+	tabs: { [string]: TextButton },
+	grids: { [string]: ScrollingFrame },
+	cards: { Card },
+	coinsLabel: TextLabel?,
+}
 
 local coins = 0
-local owned: { [string]: boolean } = {}
-local equipped = Constants.VIEWMODEL_DEFAULT_WEAPON
+local ownedWeapons: { [string]: boolean } = {}
+local ownedAbilities: { [string]: boolean } = {}
+local equippedWeapon = Constants.VIEWMODEL_DEFAULT_WEAPON
 
-local modal: Frame
-local coinsLabel: TextLabel
-local cards: { [string]: { price: TextLabel, action: TextButton, cost: number } } = {}
+local modals: { Modal } = {}
 
 local ShopStateRemote: RemoteEvent
 local ShopPurchaseRemote: RemoteEvent
 local ShopEquipRemote: RemoteEvent
 
-local function refreshButton(button: TextButton, scale: UIScale)
-	local targetScale = IDLE_SCALE
-	if pressing then
-		targetScale = PRESS_SCALE
-	elseif hovering then
-		targetScale = HOVER_SCALE
-	end
-	local targetTransparency = if hovering or pressing then HOVER_TRANSPARENCY else IDLE_TRANSPARENCY
-
-	TweenService:Create(scale, TWEEN_INFO, { Scale = targetScale }):Play()
-	TweenService:Create(button, TWEEN_INFO, { BackgroundTransparency = targetTransparency }):Play()
-end
-
-local function bindShopButton(button: TextButton)
+local function bindLobbyButton(button: TextButton, onClick: () -> ())
 	local scale = button:WaitForChild("UIScale") :: UIScale
+	local hovering = false
+	local pressing = false
+	local function refresh()
+		local targetScale = IDLE_SCALE
+		if pressing then
+			targetScale = PRESS_SCALE
+		elseif hovering then
+			targetScale = HOVER_SCALE
+		end
+		local targetTransparency = if hovering or pressing then HOVER_TRANSPARENCY else IDLE_TRANSPARENCY
+		TweenService:Create(scale, TWEEN_INFO, { Scale = targetScale }):Play()
+		TweenService:Create(button, TWEEN_INFO, { BackgroundTransparency = targetTransparency }):Play()
+	end
 	button.MouseEnter:Connect(function()
 		hovering = true
-		refreshButton(button, scale)
+		refresh()
 	end)
 	button.MouseLeave:Connect(function()
 		hovering = false
 		pressing = false
-		refreshButton(button, scale)
+		refresh()
 	end)
 	button.MouseButton1Down:Connect(function()
 		pressing = true
-		refreshButton(button, scale)
+		refresh()
 	end)
 	button.MouseButton1Up:Connect(function()
 		pressing = false
-		refreshButton(button, scale)
+		refresh()
 	end)
-	button.Activated:Connect(function()
-		modal.Visible = not modal.Visible
-	end)
+	button.Activated:Connect(onClick)
 end
 
 local function label(parent: Instance, text: string, size: UDim2, position: UDim2, alignment: Enum.TextXAlignment): TextLabel
@@ -96,21 +110,55 @@ local function label(parent: Instance, text: string, size: UDim2, position: UDim
 	return l
 end
 
+local function textButton(parent: Instance, text: string, size: UDim2, position: UDim2): TextButton
+	local b = Instance.new("TextButton")
+	b.Size = size
+	b.Position = position
+	b.FontFace = FONT
+	b.TextScaled = true
+	b.Text = text
+	b.Parent = parent
+	return b
+end
+
 local function corner(parent: Instance, radius: number)
 	local c = Instance.new("UICorner")
 	c.CornerRadius = UDim.new(0, radius)
 	c.Parent = parent
 end
 
-local function weaponPrice(template: Model): number
+local function itemPrice(template: Instance): number
 	local price = template:GetAttribute("Price")
 	if typeof(price) == "number" then
 		return price
 	end
-	return Constants.SHOP_DEFAULT_WEAPON_PRICE
+	return Constants.SHOP_DEFAULT_PRICE
 end
 
-local function buildPreview(parent: Instance, template: Model)
+local function isOwned(item: Item): boolean
+	if item.kind == KIND_WEAPON then
+		return ownedWeapons[item.name] == true
+	end
+	return ownedAbilities[item.name] == true
+end
+
+local function loadItems(): { Item }
+	local items: { Item } = {}
+	for _, kind in KINDS do
+		local folder = ReplicatedStorage:FindFirstChild(CATALOG_FOLDERS[kind])
+		if not folder then continue end
+		for _, template in folder:GetChildren() do
+			local isWeapon = kind == KIND_WEAPON and template:IsA("Model")
+			local isAbility = kind == KIND_ABILITY and template:IsA("Folder")
+			if isWeapon or isAbility then
+				table.insert(items, { kind = kind, name = template.Name, template = template })
+			end
+		end
+	end
+	return items
+end
+
+local function buildWeaponPreview(parent: Instance, template: Model)
 	local viewport = Instance.new("ViewportFrame")
 	viewport.BackgroundTransparency = 1
 	viewport.Size = UDim2.fromScale(1, 0.55)
@@ -139,122 +187,201 @@ local function buildPreview(parent: Instance, template: Model)
 	viewport.CurrentCamera = camera
 end
 
-local function buildCard(parent: Instance, template: Model)
+local function buildAbilityPreview(parent: Instance, template: Instance)
+	local icon = Instance.new("ImageLabel")
+	icon.BackgroundTransparency = 1
+	icon.AnchorPoint = Vector2.new(0.5, 0.5)
+	icon.Position = UDim2.fromScale(0.5, 0.28)
+	icon.Size = UDim2.fromScale(0.4, 0.4)
+	icon.ScaleType = Enum.ScaleType.Fit
+	local source = template:FindFirstChild("AbilityIcon")
+	if source and source:IsA("ImageLabel") then
+		icon.Image = source.Image
+		icon.ImageColor3 = source.ImageColor3
+	end
+	icon.Parent = parent
+end
+
+local function onCardActivated(modal: Modal, card: Card)
+	local item = card.item
+	if modal.mode == MODE_SHOP then
+		if not isOwned(item) then
+			ShopPurchaseRemote:FireServer(item.kind, item.name)
+		end
+		return
+	end
+	if item.kind == KIND_WEAPON and isOwned(item) and equippedWeapon ~= item.name then
+		ShopEquipRemote:FireServer(item.name)
+	end
+end
+
+local function buildCard(modal: Modal, item: Item)
 	local card = Instance.new("Frame")
-	card.Name = template.Name
+	card.Name = item.name
 	card.BackgroundColor3 = CARD_COLOR
-	card.Parent = parent
+	card.Parent = modal.grids[item.kind]
 	corner(card, 6)
 
-	buildPreview(card, template)
-	label(card, template.Name, UDim2.fromScale(0.9, 0.14), UDim2.fromScale(0.05, 0.56), Enum.TextXAlignment.Left)
+	if item.kind == KIND_WEAPON then
+		buildWeaponPreview(card, item.template :: Model)
+	else
+		buildAbilityPreview(card, item.template)
+	end
+	label(card, item.name, UDim2.fromScale(0.9, 0.14), UDim2.fromScale(0.05, 0.56), Enum.TextXAlignment.Left)
 	local price = label(card, "", UDim2.fromScale(0.9, 0.1), UDim2.fromScale(0.05, 0.7), Enum.TextXAlignment.Left)
 	price.TextColor3 = ACCENT_COLOR
 
-	local action = Instance.new("TextButton")
-	action.Size = UDim2.fromScale(0.9, 0.14)
-	action.Position = UDim2.fromScale(0.05, 0.83)
+	local action = textButton(card, "", UDim2.fromScale(0.9, 0.14), UDim2.fromScale(0.05, 0.83))
 	action.BackgroundColor3 = ACCENT_COLOR
-	action.FontFace = FONT
 	action.TextColor3 = PANEL_COLOR
-	action.TextScaled = true
-	action.Parent = card
 	corner(action, 4)
 
-	local name = template.Name
+	local record: Card = { item = item, frame = card, price = price, action = action, cost = itemPrice(item.template) }
 	action.Activated:Connect(function()
-		if equipped == name then return end
-		if owned[name] then
-			ShopEquipRemote:FireServer(name)
-		else
-			ShopPurchaseRemote:FireServer(name)
-		end
+		onCardActivated(modal, record)
 	end)
-
-	cards[name] = { price = price, action = action, cost = weaponPrice(template) }
+	table.insert(modal.cards, record)
 end
 
-local function refreshCards()
-	coinsLabel.Text = "COINS " .. coins
-	for name, card in cards do
-		if equipped == name then
+local function refreshCard(modal: Modal, card: Card)
+	local owned = isOwned(card.item)
+	if modal.mode == MODE_SHOP then
+		card.frame.Visible = true
+		if owned then
 			card.price.Text = "OWNED"
-			card.action.Text = "EQUIPPED"
+			card.action.Text = "OWNED"
 			card.action.BackgroundColor3 = DIM_COLOR
-		elseif owned[name] then
-			card.price.Text = "OWNED"
-			card.action.Text = "EQUIP"
-			card.action.BackgroundColor3 = ACCENT_COLOR
 		else
 			card.price.Text = card.cost .. " COINS"
 			card.action.Text = "BUY"
 			card.action.BackgroundColor3 = if coins >= card.cost then ACCENT_COLOR else DIM_COLOR
 		end
+		return
+	end
+
+	card.frame.Visible = owned
+	card.price.Text = ""
+	if card.item.kind ~= KIND_WEAPON then
+		card.action.Text = "OWNED"
+		card.action.BackgroundColor3 = DIM_COLOR
+	elseif equippedWeapon == card.item.name then
+		card.action.Text = "EQUIPPED"
+		card.action.BackgroundColor3 = DIM_COLOR
+	else
+		card.action.Text = "EQUIP"
+		card.action.BackgroundColor3 = ACCENT_COLOR
 	end
 end
 
-local function buildModal(parent: ScreenGui)
-	modal = Instance.new("Frame")
-	modal.Name = "ShopModal"
-	modal.AnchorPoint = Vector2.new(0.5, 0.5)
-	modal.Position = UDim2.fromScale(0.5, 0.5)
-	modal.Size = MODAL_SIZE
-	modal.BackgroundColor3 = PANEL_COLOR
-	modal.Visible = false
-	modal.ZIndex = 10
-	modal.Parent = parent
-	corner(modal, 8)
+local function refreshAll()
+	for _, modal in modals do
+		if modal.coinsLabel then
+			modal.coinsLabel.Text = "COINS " .. coins
+		end
+		for _, card in modal.cards do
+			refreshCard(modal, card)
+		end
+	end
+end
+
+local function setTab(modal: Modal, kind: string)
+	for _, k in KINDS do
+		local active = k == kind
+		modal.grids[k].Visible = active
+		modal.tabs[k].TextColor3 = if active then ACCENT_COLOR else DIM_COLOR
+	end
+end
+
+local function openModal(target: Modal)
+	for _, modal in modals do
+		modal.frame.Visible = false
+	end
+	target.frame.Visible = true
+end
+
+local function toggleModal(target: Modal)
+	if target.frame.Visible then
+		target.frame.Visible = false
+	else
+		openModal(target)
+	end
+end
+
+local function buildModal(parent: ScreenGui, title: string, mode: string, items: { Item }): Modal
+	local frame = Instance.new("Frame")
+	frame.Name = title .. "Modal"
+	frame.AnchorPoint = Vector2.new(0.5, 0.5)
+	frame.Position = UDim2.fromScale(0.5, 0.5)
+	frame.Size = MODAL_SIZE
+	frame.BackgroundColor3 = PANEL_COLOR
+	frame.Visible = false
+	frame.ZIndex = 10
+	frame.Parent = parent
+	corner(frame, 8)
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = ACCENT_COLOR
 	stroke.Thickness = 2
-	stroke.Parent = modal
+	stroke.Parent = frame
 
-	label(modal, "SHOP", UDim2.fromScale(0.3, 0.1), UDim2.fromScale(0.04, 0.03), Enum.TextXAlignment.Left)
-	coinsLabel = label(modal, "COINS 0", UDim2.fromScale(0.3, 0.07), UDim2.fromScale(0.55, 0.045), Enum.TextXAlignment.Right)
-	coinsLabel.TextColor3 = ACCENT_COLOR
+	local modal: Modal = { mode = mode, frame = frame, tabs = {}, grids = {}, cards = {}, coinsLabel = nil }
 
-	local close = Instance.new("TextButton")
+	label(frame, title:upper(), UDim2.fromScale(0.26, 0.1), UDim2.fromScale(0.04, 0.03), Enum.TextXAlignment.Left)
+
+	for i, kind in KINDS do
+		local tab = textButton(frame, TAB_TITLES[kind], UDim2.fromScale(0.15, 0.06), UDim2.fromScale(0.32 + (i - 1) * 0.16, 0.055))
+		tab.BackgroundTransparency = 1
+		tab.TextXAlignment = Enum.TextXAlignment.Left
+		tab.Activated:Connect(function()
+			setTab(modal, kind)
+		end)
+		modal.tabs[kind] = tab
+
+		local grid = Instance.new("ScrollingFrame")
+		grid.Name = kind .. "Grid"
+		grid.Size = UDim2.fromScale(0.92, 0.8)
+		grid.Position = UDim2.fromScale(0.04, 0.16)
+		grid.BackgroundTransparency = 1
+		grid.BorderSizePixel = 0
+		grid.ScrollBarThickness = 4
+		grid.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		grid.CanvasSize = UDim2.new()
+		grid.Parent = frame
+		local layout = Instance.new("UIGridLayout")
+		layout.CellSize = CARD_SIZE
+		layout.CellPadding = CARD_PADDING
+		layout.SortOrder = Enum.SortOrder.Name
+		layout.Parent = grid
+		modal.grids[kind] = grid
+	end
+
+	if mode == MODE_SHOP then
+		local coinsLabel = label(frame, "COINS 0", UDim2.fromScale(0.25, 0.07), UDim2.fromScale(0.64, 0.045), Enum.TextXAlignment.Right)
+		coinsLabel.TextColor3 = ACCENT_COLOR
+		modal.coinsLabel = coinsLabel
+	end
+
+	local close = textButton(frame, "X", UDim2.fromScale(0.06, 0.09), UDim2.fromScale(0.97, 0.03))
 	close.AnchorPoint = Vector2.new(1, 0)
-	close.Size = UDim2.fromScale(0.06, 0.09)
-	close.Position = UDim2.fromScale(0.97, 0.03)
 	close.BackgroundTransparency = 1
-	close.FontFace = FONT
 	close.TextColor3 = TEXT_COLOR
-	close.TextScaled = true
-	close.Text = "X"
-	close.Parent = modal
 	close.Activated:Connect(function()
-		modal.Visible = false
+		frame.Visible = false
 	end)
 
-	local grid = Instance.new("ScrollingFrame")
-	grid.Size = UDim2.fromScale(0.92, 0.8)
-	grid.Position = UDim2.fromScale(0.04, 0.16)
-	grid.BackgroundTransparency = 1
-	grid.BorderSizePixel = 0
-	grid.ScrollBarThickness = 4
-	grid.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	grid.CanvasSize = UDim2.new()
-	grid.Parent = modal
-	local layout = Instance.new("UIGridLayout")
-	layout.CellSize = CARD_SIZE
-	layout.CellPadding = CARD_PADDING
-	layout.SortOrder = Enum.SortOrder.Name
-	layout.Parent = grid
-
-	local weapons = ReplicatedStorage:FindFirstChild("Weapons")
-	if not weapons then return end
-	for _, template in weapons:GetChildren() do
-		if template:IsA("Model") then
-			buildCard(grid, template)
-		end
+	for _, item in items do
+		buildCard(modal, item)
 	end
+	setTab(modal, KIND_WEAPON)
+	table.insert(modals, modal)
+	return modal
 end
 
 function ShopController.init()
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 	local lobbyGui = playerGui:WaitForChild("Lobby") :: ScreenGui
-	local button = lobbyGui:WaitForChild("ShopButton") :: TextButton
+	local buttons = lobbyGui:WaitForChild("Buttons")
+	local shopButton = buttons:WaitForChild("ShopButton") :: TextButton
+	local inventoryButton = buttons:WaitForChild("InventoryButton") :: TextButton
 
 	local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 	ShopStateRemote = Remotes:WaitForChild("ShopState") :: RemoteEvent
@@ -262,24 +389,37 @@ function ShopController.init()
 	ShopEquipRemote = Remotes:WaitForChild("ShopEquip") :: RemoteEvent
 	local RoundStateRemote = Remotes:WaitForChild("RoundStateChanged") :: RemoteEvent
 
-	buildModal(lobbyGui)
-	bindShopButton(button)
-	refreshCards()
+	local items = loadItems()
+	local shop = buildModal(lobbyGui, "Shop", MODE_SHOP, items)
+	local inventory = buildModal(lobbyGui, "Inventory", MODE_INVENTORY, items)
+	bindLobbyButton(shopButton, function()
+		toggleModal(shop)
+	end)
+	bindLobbyButton(inventoryButton, function()
+		toggleModal(inventory)
+	end)
+	refreshAll()
 
-	ShopStateRemote.OnClientEvent:Connect(function(newCoins: number, ownedList: { string }, newEquipped: string)
+	ShopStateRemote.OnClientEvent:Connect(function(newCoins: number, weaponList: { string }, newEquipped: string, abilityList: { string })
 		coins = newCoins
-		owned = {}
-		for _, name in ownedList do
-			owned[name] = true
+		ownedWeapons = {}
+		for _, name in weaponList do
+			ownedWeapons[name] = true
 		end
-		equipped = newEquipped
-		refreshCards()
+		ownedAbilities = {}
+		for _, name in abilityList do
+			ownedAbilities[name] = true
+		end
+		equippedWeapon = newEquipped
+		refreshAll()
 	end)
 
-	-- Combat takes the mouse, so the modal can't stay open into a round.
+	-- Combat takes the mouse, so no modal can stay open into a round.
 	RoundStateRemote.OnClientEvent:Connect(function(phase: string)
 		if phase == Constants.PHASE_REVEAL then
-			modal.Visible = false
+			for _, modal in modals do
+				modal.frame.Visible = false
+			end
 		end
 	end)
 
