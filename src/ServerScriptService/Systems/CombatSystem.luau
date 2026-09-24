@@ -154,6 +154,27 @@ local function createShieldPart(char: Model)
 	weld.Parent = part
 
 	part.Parent = char
+
+	-- Pop in: start small and bright, overshoot to full size while settling to the resting transparency.
+	local fullSize = part.Size
+	part.Size = fullSize * Constants.SHIELD_RAISE_FX_START
+	part.Transparency = 0
+	local info = TweenInfo.new(Constants.SHIELD_RAISE_FX_TIME, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	TweenService:Create(part, info, { Size = fullSize, Transparency = Constants.SHIELD_TRANSPARENCY }):Play()
+end
+
+-- Detached, anchored copy of the bubble that shrinks and fades: used for lower and expiry.
+local function spawnLowerEffect(shieldPart: BasePart)
+	local fx = shieldPart:Clone()
+	fx:ClearAllChildren()
+	fx.Name = "ShieldLowerFx"
+	fx.Anchored = true
+	fx.CanQuery = false
+	fx.Parent = Workspace
+
+	local info = TweenInfo.new(Constants.SHIELD_LOWER_FX_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	TweenService:Create(fx, info, { Size = fx.Size * Constants.SHIELD_LOWER_FX_SCALE, Transparency = 1 }):Play()
+	Debris:AddItem(fx, Constants.SHIELD_LOWER_FX_TIME + 0.1)
 end
 
 local function spawnBreakEffect(shieldPart: BasePart)
@@ -167,6 +188,42 @@ local function spawnBreakEffect(shieldPart: BasePart)
 	local info = TweenInfo.new(Constants.SHIELD_BREAK_FX_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	TweenService:Create(fx, info, { Size = fx.Size * Constants.SHIELD_BREAK_FX_SCALE, Transparency = 1 }):Play()
 	Debris:AddItem(fx, Constants.SHIELD_BREAK_FX_TIME + 0.1)
+
+	-- Shard burst from the bubble's center.
+	local burst = Instance.new("ParticleEmitter")
+	burst.Color = ColorSequence.new(Constants.SHIELD_COLOR)
+	burst.LightEmission = 1
+	burst.Size = NumberSequence.new(0.6, 0)
+	burst.Transparency = NumberSequence.new(0, 1)
+	burst.Lifetime = NumberRange.new(0.3, 0.6)
+	burst.Speed = NumberRange.new(18, 30)
+	burst.SpreadAngle = Vector2.new(180, 180)
+	burst.Drag = 4
+	burst.Rate = 0
+	burst.Parent = fx
+	burst:Emit(Constants.SHIELD_BREAK_PARTICLES)
+
+	-- Flat ring expanding across the ground under the bubble.
+	local ring = Instance.new("Part")
+	ring.Name = "ShieldBreakRing"
+	ring.Shape = Enum.PartType.Cylinder
+	ring.Size = Vector3.new(0.2, 2, 2)
+	ring.CFrame = CFrame.new(shieldPart.Position - Vector3.new(0, Constants.SHIELD_SIZE / 2 - 0.5, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	ring.Material = Enum.Material.Neon
+	ring.Color = Constants.SHIELD_COLOR
+	ring.Transparency = 0.2
+	ring.Anchored = true
+	ring.CanCollide = false
+	ring.CanQuery = false
+	ring.CanTouch = false
+	ring.CastShadow = false
+	ring.Parent = Workspace
+	local ringInfo = TweenInfo.new(Constants.SHIELD_BREAK_RING_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenService:Create(ring, ringInfo, {
+		Size = Vector3.new(0.2, Constants.SHIELD_BREAK_RING_SIZE, Constants.SHIELD_BREAK_RING_SIZE),
+		Transparency = 1,
+	}):Play()
+	Debris:AddItem(ring, Constants.SHIELD_BREAK_RING_TIME + 0.1)
 end
 
 local function shieldDurationFor(breaks: number): number
@@ -212,6 +269,10 @@ local function lowerShield(char: Model, withCooldown: boolean)
 	local s = getState(char)
 	if not s.up then return end
 
+	local part = getShieldPart(char)
+	if part then
+		spawnLowerEffect(part)
+	end
 	removeShieldPart(char)
 	playSoundAt(getHead(char), Constants.SHIELD_LOWER_SOUND)
 	setWalkSpeed(char, Constants.SAFE_WALKSPEED)
