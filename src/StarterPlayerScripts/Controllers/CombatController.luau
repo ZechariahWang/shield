@@ -130,7 +130,8 @@ end
 local function reconcileMeterVisibility()
 	resolveElements()
 	if not container then return end
-	local visible = CombatController.isCombatActive()
+	-- Combat mode spans Reveal too, but the cluster only shows once shooting is live.
+	local visible = CombatController.isCombatActive() and currentPhase == Constants.PHASE_ROUND
 	if container.Visible == visible then return end
 	container.Visible = visible
 end

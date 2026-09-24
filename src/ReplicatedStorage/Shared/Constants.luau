@@ -108,6 +108,18 @@ Constants.SURVIVOR_COLOR = Color3.fromRGB(27, 180, 32)   -- #1BB420
 Constants.TAGGER_COLOR = Color3.fromRGB(255, 56, 60)     -- #FF383C
 Constants.WHITE = Color3.fromRGB(255, 255, 255)       -- #FFFFFF
 
+-- MINIMAP (top-left, Round phase only)
+Constants.MINIMAP_SIZE = 0.2                          -- side length as a fraction of the screen height
+Constants.MINIMAP_MARGIN = 12                         -- px from the screen edge (below the Roblox top bar)
+Constants.MINIMAP_DOT_SIZE = 6                        -- px
+Constants.MINIMAP_SHOT_FLASH = 0.35                   -- seconds a dot stays yellow after that combatant fires
+Constants.MINIMAP_BACKGROUND = Color3.fromRGB(20, 12, 8)
+Constants.MINIMAP_BACKGROUND_TRANSPARENCY = 0.25
+Constants.MINIMAP_ENEMY_COLOR = Constants.TAGGER_COLOR
+Constants.MINIMAP_SHIELD_COLOR = Constants.SHIELD_COLOR
+Constants.MINIMAP_SHOOTING_COLOR = Color3.fromRGB(255, 220, 60)
+Constants.MINIMAP_SELF_COLOR = Constants.WHITE
+
 -- SHIELD STATUS (ShieldChanged remote payload)
 Constants.SHIELD_UP = "Up"
 Constants.SHIELD_COOLDOWN_STATUS = "Cooldown"

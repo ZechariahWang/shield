@@ -79,6 +79,9 @@ local equippedWeapon = Constants.VIEWMODEL_DEFAULT_WEAPON
 local modals: { Modal } = {}
 local scrim: TextButton
 local scrimGen = 0
+local lobbyButtons: GuiObject
+local localState = Constants.STATE_LOBBY
+local currentPhase = Constants.PHASE_LOBBY
 
 local ShopStateRemote: RemoteEvent
 local ShopPurchaseRemote: RemoteEvent
@@ -409,6 +412,16 @@ local function toggleModal(target: Modal)
 	end
 end
 
+-- Alive players in the arena lose the lobby UI; eliminated spectators keep it.
+local function reconcileLobbyUI()
+	local inCombatPhase = currentPhase == Constants.PHASE_REVEAL or currentPhase == Constants.PHASE_ROUND
+	local inCombat = localState == Constants.STATE_SAFE and inCombatPhase
+	lobbyButtons.Visible = not inCombat
+	if inCombat then
+		closeAll()
+	end
+end
+
 local function buildScrim(parent: ScreenGui)
 	scrim = textButton(parent, "", UDim2.fromScale(1, 1), UDim2.new())
 	scrim.Name = "Scrim"
@@ -507,15 +520,16 @@ end
 function ShopController.init()
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 	local lobbyGui = playerGui:WaitForChild("Lobby") :: ScreenGui
-	local buttons = lobbyGui:WaitForChild("Buttons")
-	local shopButton = buttons:WaitForChild("ShopButton") :: TextButton
-	local inventoryButton = buttons:WaitForChild("InventoryButton") :: TextButton
+	lobbyButtons = lobbyGui:WaitForChild("Buttons") :: GuiObject
+	local shopButton = lobbyButtons:WaitForChild("ShopButton") :: TextButton
+	local inventoryButton = lobbyButtons:WaitForChild("InventoryButton") :: TextButton
 
 	local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 	ShopStateRemote = Remotes:WaitForChild("ShopState") :: RemoteEvent
 	ShopPurchaseRemote = Remotes:WaitForChild("ShopPurchase") :: RemoteEvent
 	ShopEquipRemote = Remotes:WaitForChild("ShopEquip") :: RemoteEvent
 	local RoundStateRemote = Remotes:WaitForChild("RoundStateChanged") :: RemoteEvent
+	local PlayerStateRemote = Remotes:WaitForChild("PlayerStateChanged") :: RemoteEvent
 
 	local items = loadItems()
 	buildScrim(lobbyGui)
@@ -543,11 +557,14 @@ function ShopController.init()
 		refreshAll()
 	end)
 
-	-- Combat takes the mouse, so no modal can stay open into a round.
 	RoundStateRemote.OnClientEvent:Connect(function(phase: string)
-		if phase == Constants.PHASE_REVEAL then
-			closeAll()
-		end
+		currentPhase = phase
+		reconcileLobbyUI()
+	end)
+	PlayerStateRemote.OnClientEvent:Connect(function(player: Player, state: string)
+		if player ~= Players.LocalPlayer then return end
+		localState = state
+		reconcileLobbyUI()
 	end)
 
 	ShopStateRemote:FireServer()

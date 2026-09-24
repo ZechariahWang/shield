@@ -408,6 +408,8 @@ local function shoot(shooter: Model, origin: any, direction: any)
 	local endPoint = if result then result.Position else origin + aim * Constants.PISTOL_RANGE
 	spawnTracer(origin, endPoint)
 	playSoundAt(head, Constants.PISTOL_SHOT_SOUND)
+	-- Replicated shot counter; the client minimap flashes the shooter on every change.
+	shooter:SetAttribute("Shots", (shooter:GetAttribute("Shots") or 0) + 1)
 
 	if not result then return end
 
