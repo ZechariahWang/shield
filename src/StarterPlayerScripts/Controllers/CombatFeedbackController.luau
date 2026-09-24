@@ -87,13 +87,55 @@ local function pulseVignette(intensity: number)
 	end)
 end
 
-local CROSSHAIR_IDLE_SIZE = UDim2.fromOffset(6, 6)
-local CROSSHAIR_PUNCH_SIZE = UDim2.fromOffset(12, 12)
+-- Four arms around an empty center; the Studio Frame is only the anchor that
+-- follows the mouse. A punch scales the whole crosshair (arms spread) and flashes
+-- the arm color.
+local CROSSHAIR_IDLE_SIZE = UDim2.fromOffset(24, 24)
+local CROSSHAIR_PUNCH_SIZE = UDim2.fromOffset(36, 36)
+local CROSSHAIR_ARM_LENGTH = 0.34   -- fraction of the crosshair size per arm; the rest is the center gap
+local CROSSHAIR_ARM_THICKNESS = 2   -- px
 local CROSSHAIR_IDLE_COLOR = Color3.fromRGB(255, 159, 80)
 local CROSSHAIR_PUNCH_COLOR = Color3.fromRGB(255, 80, 30)
 local CROSSHAIR_IDLE_TRANSPARENCY = 0
 local CROSSHAIR_PUNCH_TRANSPARENCY = 0
+local CROSSHAIR_OUTLINE_COLOR = Color3.fromRGB(20, 12, 8)
 local CROSSHAIR_TWEEN_TIME = 0.12
+
+local crosshairArms: { Frame } = {}
+
+local function buildCrosshair()
+	crosshair.BackgroundTransparency = 1
+	for _, child in crosshair:GetChildren() do
+		if child:IsA("UIStroke") then
+			child.Enabled = false
+		end
+	end
+
+	local horizontal = UDim2.new(CROSSHAIR_ARM_LENGTH, 0, 0, CROSSHAIR_ARM_THICKNESS)
+	local vertical = UDim2.new(0, CROSSHAIR_ARM_THICKNESS, CROSSHAIR_ARM_LENGTH, 0)
+	local arms = {
+		{ anchor = Vector2.new(0, 0.5), position = UDim2.fromScale(0, 0.5), size = horizontal },
+		{ anchor = Vector2.new(1, 0.5), position = UDim2.fromScale(1, 0.5), size = horizontal },
+		{ anchor = Vector2.new(0.5, 0), position = UDim2.fromScale(0.5, 0), size = vertical },
+		{ anchor = Vector2.new(0.5, 1), position = UDim2.fromScale(0.5, 1), size = vertical },
+	}
+	for _, spec in arms do
+		local arm = Instance.new("Frame")
+		arm.Name = "Arm"
+		arm.AnchorPoint = spec.anchor
+		arm.Position = spec.position
+		arm.Size = spec.size
+		arm.BorderSizePixel = 0
+		arm.BackgroundColor3 = CROSSHAIR_IDLE_COLOR
+		arm.ZIndex = crosshair.ZIndex
+		local outline = Instance.new("UIStroke")
+		outline.Thickness = 1
+		outline.Color = CROSSHAIR_OUTLINE_COLOR
+		outline.Parent = arm
+		arm.Parent = crosshair
+		table.insert(crosshairArms, arm)
+	end
+end
 
 local localState: string = Constants.STATE_LOBBY
 local combatModeActive = false
@@ -107,22 +149,23 @@ end
 local function resetCrosshair()
 	if not crosshair then return end
 	crosshair.Size = CROSSHAIR_IDLE_SIZE
-	crosshair.BackgroundColor3 = CROSSHAIR_IDLE_COLOR
-	crosshair.BackgroundTransparency = CROSSHAIR_IDLE_TRANSPARENCY
+	for _, arm in crosshairArms do
+		arm.BackgroundColor3 = CROSSHAIR_IDLE_COLOR
+		arm.BackgroundTransparency = CROSSHAIR_IDLE_TRANSPARENCY
+	end
 end
 
 local function punchCrosshair()
 	if not crosshair or not crosshair.Visible then return end
 	-- Reverses = true plays the punch out and back without a second tween.
-	TweenService:Create(
-		crosshair,
-		TweenInfo.new(CROSSHAIR_TWEEN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, true),
-		{
-			Size = CROSSHAIR_PUNCH_SIZE,
+	local info = TweenInfo.new(CROSSHAIR_TWEEN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, true)
+	TweenService:Create(crosshair, info, { Size = CROSSHAIR_PUNCH_SIZE }):Play()
+	for _, arm in crosshairArms do
+		TweenService:Create(arm, info, {
 			BackgroundColor3 = CROSSHAIR_PUNCH_COLOR,
 			BackgroundTransparency = CROSSHAIR_PUNCH_TRANSPARENCY,
-		}
-	):Play()
+		}):Play()
+	end
 end
 
 local function getLocalHumanoid(): Humanoid?
@@ -143,6 +186,8 @@ local function setCombatMode(active: boolean)
 	if crosshair then
 		crosshair.Visible = active
 	end
+	-- The crosshair replaces the system cursor while combat is active.
+	UserInputService.MouseIconEnabled = not active
 end
 
 
@@ -363,6 +408,9 @@ end
 function CombatFeedbackController.init()
 
 	initHUD()
+	if crosshair then
+		buildCrosshair()
+	end
 	setCombatMode(false)
 
 	local Remotes = ReplicatedStorage:WaitForChild("Remotes")
