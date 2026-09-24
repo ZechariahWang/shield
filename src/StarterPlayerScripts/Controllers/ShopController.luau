@@ -22,7 +22,8 @@ local PANEL_TRANSPARENCY = 0.05
 local CARD_COLOR = Color3.fromRGB(36, 24, 16)
 local INSET_COLOR = Color3.fromRGB(14, 9, 6)
 local TEXT_COLOR = Color3.fromRGB(255, 245, 220)
-local ACCENT_COLOR = Color3.fromRGB(255, 159, 80)
+local ACCENT_COLOR = Color3.fromRGB(255, 159, 80)             -- shop, matches the SHOP lobby button
+local INVENTORY_ACCENT_COLOR = Color3.fromRGB(80, 255, 60)    -- matches the INVENTORY lobby button
 local DIM_COLOR = Color3.fromRGB(120, 105, 90)
 local MUTED_BUTTON_COLOR = Color3.fromRGB(52, 40, 32)
 local UNAFFORDABLE_TRANSPARENCY = 0.55
@@ -58,6 +59,7 @@ type Item = { kind: string, name: string, template: Instance }
 type Card = { item: Item, frame: Frame, price: TextLabel, action: TextButton, cost: number, baseColor: Color3 }
 type Modal = {
 	mode: string,
+	accent: Color3,
 	frame: Frame,
 	scale: UIScale,
 	open: boolean,
@@ -264,12 +266,12 @@ local function buildCard(modal: Modal, item: Item)
 	end
 	label(card, item.name, UDim2.fromScale(0.9, 0.13), UDim2.fromScale(0.05, 0.58), Enum.TextXAlignment.Left)
 	local price = label(card, "", UDim2.fromScale(0.9, 0.09), UDim2.fromScale(0.05, 0.71), Enum.TextXAlignment.Left)
-	price.TextColor3 = ACCENT_COLOR
+	price.TextColor3 = modal.accent
 
 	local action = textButton(card, "", UDim2.fromScale(0.9, 0.13), UDim2.fromScale(0.05, 0.83))
 	action.TextColor3 = PANEL_COLOR
 
-	local record: Card = { item = item, frame = card, price = price, action = action, cost = itemPrice(item.template), baseColor = ACCENT_COLOR }
+	local record: Card = { item = item, frame = card, price = price, action = action, cost = itemPrice(item.template), baseColor = modal.accent }
 	action.Activated:Connect(function()
 		onCardActivated(modal, record)
 	end)
@@ -300,7 +302,7 @@ local function refreshCard(modal: Modal, card: Card)
 		else
 			card.price.Text = card.cost .. " COINS"
 			local transparency = if coins >= card.cost then 0 else UNAFFORDABLE_TRANSPARENCY
-			styleAction(card, "BUY", ACCENT_COLOR, PANEL_COLOR, transparency)
+			styleAction(card, "BUY", modal.accent, PANEL_COLOR, transparency)
 		end
 		return
 	end
@@ -312,7 +314,7 @@ local function refreshCard(modal: Modal, card: Card)
 	elseif equippedWeapon == card.item.name then
 		styleAction(card, "EQUIPPED", MUTED_BUTTON_COLOR, DIM_COLOR, 0)
 	else
-		styleAction(card, "EQUIP", ACCENT_COLOR, PANEL_COLOR, 0)
+		styleAction(card, "EQUIP", modal.accent, PANEL_COLOR, 0)
 	end
 end
 
@@ -417,7 +419,7 @@ local function buildScrim(parent: ScreenGui)
 	scrim.Activated:Connect(closeAll)
 end
 
-local function buildModal(parent: ScreenGui, title: string, mode: string, items: { Item }): Modal
+local function buildModal(parent: ScreenGui, title: string, mode: string, items: { Item }, accent: Color3): Modal
 	local frame = block(parent, PANEL_COLOR, MODAL_SIZE, MODAL_POSITION)
 	frame.Name = title .. "Modal"
 	frame.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -427,9 +429,10 @@ local function buildModal(parent: ScreenGui, title: string, mode: string, items:
 	local scale = Instance.new("UIScale")
 	scale.Parent = frame
 
-	local underline = block(frame, ACCENT_COLOR, UDim2.new(0.08, 0, 0, 3), UDim2.fromScale(TAB_X[KIND_WEAPON], 0.125))
+	local underline = block(frame, accent, UDim2.new(0.08, 0, 0, 3), UDim2.fromScale(TAB_X[KIND_WEAPON], 0.125))
 	local modal: Modal = {
 		mode = mode,
+		accent = accent,
 		frame = frame,
 		scale = scale,
 		open = false,
@@ -441,7 +444,7 @@ local function buildModal(parent: ScreenGui, title: string, mode: string, items:
 		coinsLabel = nil,
 	}
 
-	block(frame, ACCENT_COLOR, UDim2.new(0, ACCENT_BAR_WIDTH, 0.08, 0), UDim2.fromScale(0.04, 0.045))
+	block(frame, accent, UDim2.new(0, ACCENT_BAR_WIDTH, 0.08, 0), UDim2.fromScale(0.04, 0.045))
 	label(frame, title:upper(), UDim2.fromScale(0.24, 0.08), UDim2.fromScale(0.055, 0.045), Enum.TextXAlignment.Left)
 
 	for _, kind in KINDS do
@@ -476,9 +479,9 @@ local function buildModal(parent: ScreenGui, title: string, mode: string, items:
 
 	if mode == MODE_SHOP then
 		local coinsLabel = label(frame, "0", UDim2.fromScale(0.14, 0.06), UDim2.fromScale(0.74, 0.055), Enum.TextXAlignment.Right)
-		coinsLabel.TextColor3 = ACCENT_COLOR
+		coinsLabel.TextColor3 = accent
 		modal.coinsLabel = coinsLabel
-		local coin = block(frame, ACCENT_COLOR, UDim2.fromOffset(10, 10), UDim2.fromScale(0.89, 0.085))
+		local coin = block(frame, accent, UDim2.fromOffset(10, 10), UDim2.fromScale(0.89, 0.085))
 		coin.AnchorPoint = Vector2.new(0, 0.5)
 	end
 
@@ -516,8 +519,8 @@ function ShopController.init()
 
 	local items = loadItems()
 	buildScrim(lobbyGui)
-	local shop = buildModal(lobbyGui, "Shop", MODE_SHOP, items)
-	local inventory = buildModal(lobbyGui, "Inventory", MODE_INVENTORY, items)
+	local shop = buildModal(lobbyGui, "Shop", MODE_SHOP, items, ACCENT_COLOR)
+	local inventory = buildModal(lobbyGui, "Inventory", MODE_INVENTORY, items, INVENTORY_ACCENT_COLOR)
 	bindLobbyButton(shopButton, function()
 		toggleModal(shop)
 	end)
