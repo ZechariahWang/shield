@@ -29,8 +29,12 @@ local function dash(player: Player)
 		return
 	end
 
-	local lookVec = root.CFrame.LookVector
-	local horizontal = Vector3.new(lookVec.X, 0, lookVec.Z)
+	-- Dash the way the player is moving (WASD, replicated via MoveDirection); forward when standing still.
+	local direction = hum.MoveDirection
+	if direction.Magnitude < 0.1 then
+		direction = root.CFrame.LookVector
+	end
+	local horizontal = Vector3.new(direction.X, 0, direction.Z)
 	if horizontal.Magnitude < 0.001 then return end
 	horizontal = horizontal.Unit
 
