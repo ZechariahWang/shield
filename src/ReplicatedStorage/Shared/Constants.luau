@@ -8,6 +8,20 @@ Constants.ROUND_TIME = 90
 Constants.END_DELAY_TIME = 3 -- post-round freeze: players stay in arena, invincible, abilities/shooting off, before teleport to lobby
 Constants.END_TIME = 5
 
+-- TEST MODE (solo playtesting). Rounds start with one player, the timer and
+-- last-standing checks are off, and the round ends when a Safe player touches
+-- a part named TEST_END_WALL in the loaded map (or when no real player is Safe).
+Constants.TEST_MODE = true
+Constants.TEST_END_WALL = "ShortWall"
+
+-- BOTS (server-driven combatants cloned from ReplicatedStorage.Assets.Rigs.NPC)
+Constants.BOT_COUNT = 3                   -- spawned at Reveal, removed at round end; 0 disables
+Constants.BOT_RIG_PATH = { "Assets", "Rigs", "NPC" }
+Constants.BOT_SHOOT_INTERVAL = { 2, 5 }    -- seconds between shots, uniform random
+Constants.BOT_SHIELD_INTERVAL = { 4, 10 }  -- seconds between shield raises, uniform random
+Constants.BOT_AIM_JITTER = 0.2            -- radians of random error on an aimed shot (they miss a lot on purpose)
+Constants.BOT_WAYPOINT_TIMEOUT = 4        -- seconds before a stuck bot picks a new destination
+
 -- PISTOL
 Constants.PISTOL_COOLDOWN = 1.0
 Constants.PISTOL_COOLDOWN_TOLERANCE = 0.05 -- server slack for network jitter: the client stamps at send, the server at receive

@@ -161,8 +161,8 @@ local function colorForDamage(dmg: number): (Color3, Color3)
 	end
 end
 
-local function spawnDamageNumber(victim: Player, dmg: number)
-	local char = victim.Character
+local function spawnDamageNumber(victim: Player | Model, dmg: number)
+	local char: Model? = if victim:IsA("Player") then victim.Character else victim
 	if not char then return end
 	local head = char:FindFirstChild("Head") :: BasePart?
 	if not head then return end
@@ -306,7 +306,7 @@ local function sizzleStep(_dt: number)
 	end
 end
 
-local function onDamageDealt(victim: Player, dmg: number, _victimHP: number)
+local function onDamageDealt(victim: Player | Model, dmg: number, _victimHP: number)
 	-- Only the shooter who landed the hit receives this.
 	if not victim or not victim.Parent then return end
 

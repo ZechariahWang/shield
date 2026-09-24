@@ -78,8 +78,15 @@ function KillCamController.init()
 		if victimName ~= localPlayer.Name then return end
 		if not killerName or killerName == localPlayer.Name then return end
 		local killer = Players:FindFirstChild(killerName)
-		if not killer or not killer:IsA("Player") or not killer.Character then return end
-		KillCamController.play(killer.Character)
+		if killer and killer:IsA("Player") and killer.Character then
+			KillCamController.play(killer.Character)
+			return
+		end
+		local botsFolder = Workspace:FindFirstChild("Bots")
+		local bot = if botsFolder then botsFolder:FindFirstChild(killerName) else nil
+		if bot and bot:IsA("Model") then
+			KillCamController.play(bot)
+		end
 	end)
 end
 

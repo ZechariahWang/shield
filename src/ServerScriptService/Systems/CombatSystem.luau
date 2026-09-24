@@ -8,6 +8,9 @@ local Workspace = game:GetService("Workspace")
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local PlayerState = require(script.Parent.PlayerState)
 
+-- Every combatant is a character Model. Players map to their Character at the
+-- remote boundary; bots are registered directly. Client-only feedback (remotes)
+-- is skipped for combatants without a Player.
 local CombatSystem = {}
 
 type ShieldState = {
@@ -20,9 +23,10 @@ type ShieldState = {
 }
 
 local active = false
-local shields: { [Player]: ShieldState } = {}
+local shields: { [Model]: ShieldState } = {}
 -- PlayerState only catches up at the end of the resumption cycle, so track eliminations here too.
-local eliminatedPlayers: { [Player]: boolean } = {}
+local eliminatedChars: { [Model]: boolean } = {}
+local bots: { [Model]: boolean } = {}
 local heartbeatConn: RBXScriptConnection? = nil
 
 local eliminated = Instance.new("BindableEvent")
@@ -57,36 +61,52 @@ local function newShieldState(): ShieldState
 	}
 end
 
-local function getState(player: Player): ShieldState
-	local s = shields[player]
+local function getState(char: Model): ShieldState
+	local s = shields[char]
 	if not s then
 		s = newShieldState()
-		shields[player] = s
+		shields[char] = s
 	end
 	return s
 end
 
-local function getHumanoid(player: Player): Humanoid?
-	local char = player.Character
-	if not char then return nil end
+local function playerOf(char: Model): Player?
+	return Players:GetPlayerFromCharacter(char)
+end
+
+-- What remotes carry to identify a combatant: the Player when there is one, else the bot Model.
+local function handleOf(char: Model): Player | Model
+	local player = playerOf(char)
+	if player then return player end
+	return char
+end
+
+local function isCombatant(char: Model): boolean
+	if bots[char] then return true end
+	local player = playerOf(char)
+	if not player then return false end
+	return PlayerState.get(player) == Constants.STATE_SAFE
+end
+
+local function getHumanoid(char: Model): Humanoid?
 	return char:FindFirstChildOfClass("Humanoid")
 end
 
-local function setWalkSpeed(player: Player, speed: number)
-	local hum = getHumanoid(player)
+local function setWalkSpeed(char: Model, speed: number)
+	local hum = getHumanoid(char)
 	if hum then
 		hum.WalkSpeed = speed
 	end
 end
 
-local function sendShieldStatus(player: Player, status: string, duration: number, breaks: number)
+local function sendShieldStatus(char: Model, status: string, duration: number, breaks: number)
 	if not ShieldChangedRemote then return end
+	local player = playerOf(char)
+	if not player then return end
 	ShieldChangedRemote:FireClient(player, status, duration, breaks)
 end
 
-local function getHead(player: Player): BasePart?
-	local char = player.Character
-	if not char then return nil end
+local function getHead(char: Model): BasePart?
 	return char:FindFirstChild("Head") :: BasePart?
 end
 
@@ -99,14 +119,12 @@ local function playSoundAt(part: BasePart?, soundId: string)
 	Debris:AddItem(sound, Constants.SOUND_CLEANUP_TIME)
 end
 
-local function getShieldPart(player: Player): BasePart?
-	local char = player.Character
-	if not char then return nil end
+local function getShieldPart(char: Model): BasePart?
 	return char:FindFirstChild("PlayerShield") :: BasePart?
 end
 
-local function removeShieldPart(player: Player)
-	local part = getShieldPart(player)
+local function removeShieldPart(char: Model)
+	local part = getShieldPart(char)
 	if part then
 		part:Destroy()
 	end
@@ -156,19 +174,19 @@ local function shieldDurationFor(breaks: number): number
 	return Constants.SHIELD_DURATIONS[index]
 end
 
-local function raiseShield(player: Player)
+local function raiseShield(char: Model)
 	if not active then return end
-	if PlayerState.get(player) ~= Constants.STATE_SAFE then return end
+	if not isCombatant(char) then return end
+	if eliminatedChars[char] then return end
 
-	local s = getState(player)
+	local s = getState(char)
 	if s.up then return end
 
 	local now = os.clock()
 	if now < s.cooldownUntil then return end
 
-	local hum = getHumanoid(player)
-	local char = player.Character
-	if not hum or not char or hum.Health <= 0 then return end
+	local hum = getHumanoid(char)
+	if not hum or hum.Health <= 0 then return end
 
 	if now - s.lastBreakAt > Constants.SHIELD_CHAIN_RESET then
 		s.breaksInChain = 0
@@ -176,9 +194,9 @@ local function raiseShield(player: Player)
 
 	local duration = shieldDurationFor(s.breaksInChain)
 
-	removeShieldPart(player)
+	removeShieldPart(char)
 	createShieldPart(char)
-	playSoundAt(getHead(player), Constants.SHIELD_RAISE_SOUND)
+	playSoundAt(getHead(char), Constants.SHIELD_RAISE_SOUND)
 
 	hum.WalkSpeed = Constants.SHIELD_WALKSPEED
 
@@ -186,30 +204,30 @@ local function raiseShield(player: Player)
 	s.expiresAt = now + duration
 	s.cooldownUntil = 0
 
-	sendShieldStatus(player, Constants.SHIELD_UP, duration, s.breaksInChain)
+	sendShieldStatus(char, Constants.SHIELD_UP, duration, s.breaksInChain)
 end
 
 -- withCooldown is false only for a break: a broken shield can be raised again at once.
-local function lowerShield(player: Player, withCooldown: boolean)
-	local s = getState(player)
+local function lowerShield(char: Model, withCooldown: boolean)
+	local s = getState(char)
 	if not s.up then return end
 
-	removeShieldPart(player)
-	playSoundAt(getHead(player), Constants.SHIELD_LOWER_SOUND)
-	setWalkSpeed(player, Constants.SAFE_WALKSPEED)
+	removeShieldPart(char)
+	playSoundAt(getHead(char), Constants.SHIELD_LOWER_SOUND)
+	setWalkSpeed(char, Constants.SAFE_WALKSPEED)
 	s.up = false
 	s.expiresAt = 0
 
 	if withCooldown then
 		s.cooldownUntil = os.clock() + Constants.SHIELD_COOLDOWN
-		sendShieldStatus(player, Constants.SHIELD_COOLDOWN_STATUS, Constants.SHIELD_COOLDOWN, s.breaksInChain)
+		sendShieldStatus(char, Constants.SHIELD_COOLDOWN_STATUS, Constants.SHIELD_COOLDOWN, s.breaksInChain)
 	else
 		s.cooldownUntil = 0
-		sendShieldStatus(player, Constants.SHIELD_READY, 0, s.breaksInChain)
+		sendShieldStatus(char, Constants.SHIELD_READY, 0, s.breaksInChain)
 	end
 end
 
-local function breakShield(victim: Player, shooter: Player)
+local function breakShield(victim: Model, shooter: Model)
 	local s = getState(victim)
 
 	local part = getShieldPart(victim)
@@ -228,14 +246,20 @@ local function breakShield(victim: Player, shooter: Player)
 	playSoundAt(getHead(victim), Constants.SHIELD_BREAK_SOUND)
 
 	if ShotBlockedRemote then
-		ShotBlockedRemote:FireClient(shooter, victim)
-		ShotBlockedRemote:FireClient(victim, shooter)
+		local shooterPlayer = playerOf(shooter)
+		local victimPlayer = playerOf(victim)
+		if shooterPlayer then
+			ShotBlockedRemote:FireClient(shooterPlayer, handleOf(victim))
+		end
+		if victimPlayer then
+			ShotBlockedRemote:FireClient(victimPlayer, handleOf(shooter))
+		end
 	end
 end
 
-local function clearShieldSilently(player: Player)
-	removeShieldPart(player)
-	shields[player] = newShieldState()
+local function clearShieldSilently(char: Model)
+	removeShieldPart(char)
+	shields[char] = newShieldState()
 end
 
 local function spawnTracer(origin: Vector3, endPoint: Vector3)
@@ -267,33 +291,35 @@ local function isFiniteVector(v: Vector3): boolean
 	return true
 end
 
-local function playerFromHit(instance: Instance?): Player?
+-- Walk up from the hit part to the combatant Model that owns it (player character or bot).
+local function combatantFromHit(instance: Instance?): Model?
 	local current = instance
 	while current and current ~= Workspace do
 		if current:IsA("Model") then
-			local found = Players:GetPlayerFromCharacter(current)
-			if found then return found end
+			if bots[current] or Players:GetPlayerFromCharacter(current) then
+				return current
+			end
 		end
 		current = current.Parent
 	end
 	return nil
 end
 
-local function eliminate(victim: Player, killer: Player?)
+local function eliminate(victim: Model, killer: Model?)
 	local hum = getHumanoid(victim)
 	if hum then
 		hum.Health = hum.MaxHealth
 	end
 	clearShieldSilently(victim)
 	setWalkSpeed(victim, Constants.SAFE_WALKSPEED)
-	eliminatedPlayers[victim] = true
+	eliminatedChars[victim] = true
 	eliminated:Fire(victim, killer)
 end
 
-local function shoot(shooter: Player, origin: any, direction: any)
+local function shoot(shooter: Model, origin: any, direction: any)
 	if not active then return end
-	if PlayerState.get(shooter) ~= Constants.STATE_SAFE then return end
-	if eliminatedPlayers[shooter] then return end
+	if not isCombatant(shooter) then return end
+	if eliminatedChars[shooter] then return end
 
 	if typeof(origin) ~= "Vector3" or typeof(direction) ~= "Vector3" then return end
 	if not isFiniteVector(origin) or not isFiniteVector(direction) then return end
@@ -305,10 +331,8 @@ local function shoot(shooter: Player, origin: any, direction: any)
 	local now = os.clock()
 	if now - s.lastShotAt < Constants.PISTOL_COOLDOWN - Constants.PISTOL_COOLDOWN_TOLERANCE then return end
 
-	local char = shooter.Character
-	if not char then return end
-	local head = char:FindFirstChild("Head") :: BasePart?
-	local hum = char:FindFirstChildOfClass("Humanoid")
+	local head = getHead(shooter)
+	local hum = getHumanoid(shooter)
 	if not head or not hum or hum.Health <= 0 then return end
 	if (origin - head.Position).Magnitude > Constants.PISTOL_ORIGIN_TOLERANCE then return end
 
@@ -317,7 +341,7 @@ local function shoot(shooter: Player, origin: any, direction: any)
 	local aim = direction.Unit
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
-	params.FilterDescendantsInstances = { char }
+	params.FilterDescendantsInstances = { shooter }
 
 	local result = Workspace:Raycast(origin, aim * Constants.PISTOL_RANGE, params)
 	local endPoint = if result then result.Position else origin + aim * Constants.PISTOL_RANGE
@@ -326,10 +350,10 @@ local function shoot(shooter: Player, origin: any, direction: any)
 
 	if not result then return end
 
-	local victim = playerFromHit(result.Instance)
+	local victim = combatantFromHit(result.Instance)
 	if not victim or victim == shooter then return end
-	if PlayerState.get(victim) ~= Constants.STATE_SAFE then return end
-	if eliminatedPlayers[victim] then return end
+	if not isCombatant(victim) then return end
+	if eliminatedChars[victim] then return end
 
 	local victimHum = getHumanoid(victim)
 	if not victimHum or victimHum.Health <= 0 then return end
@@ -342,11 +366,13 @@ local function shoot(shooter: Player, origin: any, direction: any)
 
 	local newHealth = math.max(0, victimHum.Health - Constants.PISTOL_DAMAGE)
 
-	if DamageDealtRemote then
-		DamageDealtRemote:FireClient(shooter, victim, Constants.PISTOL_DAMAGE, newHealth)
+	local shooterPlayer = playerOf(shooter)
+	local victimPlayer = playerOf(victim)
+	if DamageDealtRemote and shooterPlayer then
+		DamageDealtRemote:FireClient(shooterPlayer, handleOf(victim), Constants.PISTOL_DAMAGE, newHealth)
 	end
-	if DamageTakenRemote then
-		DamageTakenRemote:FireClient(victim, shooter, Constants.PISTOL_DAMAGE, newHealth)
+	if DamageTakenRemote and victimPlayer then
+		DamageTakenRemote:FireClient(victimPlayer, handleOf(shooter), Constants.PISTOL_DAMAGE, newHealth)
 	end
 
 	if newHealth <= 0 then
@@ -358,47 +384,77 @@ end
 
 local function step()
 	local now = os.clock()
-	for player, s in shields do
-		if not player.Parent then
-			shields[player] = nil
+	for char, s in shields do
+		if not char.Parent then
+			shields[char] = nil
+			eliminatedChars[char] = nil
 			continue
 		end
 
-		local hum = getHumanoid(player)
+		local hum = getHumanoid(char)
 		if s.up and not hum then
 			-- Character gone mid-shield: drop the state without telling the client.
-			shields[player] = newShieldState()
+			shields[char] = newShieldState()
 			continue
 		end
 
 		if s.up and now >= s.expiresAt then
-			lowerShield(player, true)
+			lowerShield(char, true)
 		elseif not s.up and s.cooldownUntil > 0 and now >= s.cooldownUntil then
 			s.cooldownUntil = 0
-			sendShieldStatus(player, Constants.SHIELD_READY, 0, s.breaksInChain)
+			sendShieldStatus(char, Constants.SHIELD_READY, 0, s.breaksInChain)
 		end
 	end
 end
 
+-- Public entry points for server-driven combatants (bots). Same rules as the remotes.
+function CombatSystem.shoot(shooter: Model, origin: Vector3, direction: Vector3)
+	shoot(shooter, origin, direction)
+end
+
+function CombatSystem.raiseShield(char: Model)
+	raiseShield(char)
+end
+
+function CombatSystem.registerBot(char: Model)
+	bots[char] = true
+	shields[char] = newShieldState()
+end
+
+function CombatSystem.unregisterBot(char: Model)
+	bots[char] = nil
+	shields[char] = nil
+	eliminatedChars[char] = nil
+end
+
 function CombatSystem.start()
 	for _, player in Players:GetPlayers() do
-		removeShieldPart(player)
-		shields[player] = newShieldState()
-		sendShieldStatus(player, Constants.SHIELD_READY, 0, 0)
+		local char = player.Character
+		if char then
+			removeShieldPart(char)
+			shields[char] = newShieldState()
+		end
+		ShieldChangedRemote:FireClient(player, Constants.SHIELD_READY, 0, 0)
 	end
-	table.clear(eliminatedPlayers)
+	table.clear(eliminatedChars)
 	active = true
 end
 
 function CombatSystem.stop()
 	active = false
 	for _, player in Players:GetPlayers() do
-		removeShieldPart(player)
-		setWalkSpeed(player, Constants.SAFE_WALKSPEED)
-		sendShieldStatus(player, Constants.SHIELD_READY, 0, 0)
+		local char = player.Character
+		if char then
+			removeShieldPart(char)
+			setWalkSpeed(char, Constants.SAFE_WALKSPEED)
+		end
+		ShieldChangedRemote:FireClient(player, Constants.SHIELD_READY, 0, 0)
+	end
+	for char in bots do
+		removeShieldPart(char)
 	end
 	table.clear(shields)
-	table.clear(eliminatedPlayers)
+	table.clear(eliminatedChars)
 end
 
 function CombatSystem.init()
@@ -412,22 +468,21 @@ function CombatSystem.init()
 	DamageTakenRemote = ensureRemote(Remotes, "DamageTaken")
 
 	ShootRequestRemote.OnServerEvent:Connect(function(player, origin, direction)
-		shoot(player, origin, direction)
+		local char = player.Character
+		if not char then return end
+		shoot(char, origin, direction)
 	end)
 
 	ShieldRequestRemote.OnServerEvent:Connect(function(player, raise)
 		if typeof(raise) ~= "boolean" then return end
+		local char = player.Character
+		if not char then return end
 		if raise then
-			raiseShield(player)
+			raiseShield(char)
 		else
 			if not active then return end
-			lowerShield(player, true)
+			lowerShield(char, true)
 		end
-	end)
-
-	Players.PlayerRemoving:Connect(function(player)
-		shields[player] = nil
-		eliminatedPlayers[player] = nil
 	end)
 
 	if heartbeatConn then

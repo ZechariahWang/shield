@@ -92,15 +92,20 @@ function MapManager.hasMap(): boolean
 	return currentMap ~= nil and currentMap.Parent ~= nil
 end
 
-function MapManager.teleportToArena(player: Player)
+function MapManager.randomSpawnCFrame(): CFrame?
 	local spawns = getCurrentSpawnPoints()
-	if #spawns == 0 then
+	if #spawns == 0 then return nil end
+	return spawns[math.random(1, #spawns)].CFrame
+end
+
+function MapManager.teleportToArena(player: Player)
+	local spawn = MapManager.randomSpawnCFrame()
+	if not spawn then
 		warn("MapManager: current map has no SpawnPoints: using fallback")
 		teleportTo(player, CFrame.new(0, 5, 0))
 		return
 	end
-	local target = spawns[math.random(1, #spawns)]
-	teleportTo(player, target.CFrame + Vector3.new(0, 4, 0))
+	teleportTo(player, spawn + Vector3.new(0, 4, 0))
 end
 
 function MapManager.teleportToLobby(player: Player)

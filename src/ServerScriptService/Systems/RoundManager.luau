@@ -1,13 +1,17 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local PlayerState = require(script.Parent.PlayerState)
 local CombatSystem = require(script.Parent.CombatSystem)
 local AbilitySystem = require(script.Parent.AbilitySystem)
 local MapManager = require(script.Parent.MapManager)
+local BotSystem = require(script.Parent.BotSystem)
 
 local RoundManager = {}
+
+local minPlayers = if Constants.TEST_MODE then 1 else Constants.MIN_PLAYERS
 
 local currentPhase = Constants.PHASE_LOBBY
 local currentPhaseEndClock = 0
@@ -151,6 +155,7 @@ local function endRound(reason: string, winners: { string })
 	-- added below is the only one left on a character.
 	CombatSystem.stop()
 	AbilitySystem.stop()
+	BotSystem.stop()
 
 	for _, player in Players:GetPlayers() do
 		applyTPWeapon(player, false)
@@ -194,6 +199,24 @@ local function endRound(reason: string, winners: { string })
 	task.wait(Constants.END_TIME)
 end
 
+-- Test mode: the round ends when a Safe player's character touches the end wall.
+-- Connections die with the map, so nothing to clean up.
+local function bindTestEndWall(onTouched: () -> ())
+	local map = Workspace:FindFirstChild("LoadedMap")
+	if not map then return end
+	for _, part in map:GetDescendants() do
+		if not part:IsA("BasePart") or part.Name ~= Constants.TEST_END_WALL then continue end
+		part.Touched:Connect(function(hit)
+			local char = hit:FindFirstAncestorOfClass("Model")
+			if not char then return end
+			local player = Players:GetPlayerFromCharacter(char)
+			if player and PlayerState.get(player) == Constants.STATE_SAFE then
+				onTouched()
+			end
+		end)
+	end
+end
+
 local function runRound()
 	local participants: { Player } = {}
 	for _, player in Players:GetPlayers() do
@@ -204,7 +227,7 @@ local function runRound()
 		end
 	end
 
-	if #participants < Constants.MIN_PLAYERS then
+	if #participants < minPlayers then
 		for _, player in participants do
 			setLobby(player)
 			MapManager.teleportToLobby(player)
@@ -214,30 +237,45 @@ local function runRound()
 		return
 	end
 
+	BotSystem.spawn()
+
 	-- Reveal phase: positioning countdown. Shooting, shields and dash stay off.
 	broadcastPhase(Constants.PHASE_REVEAL, Constants.REVEAL_TIME, nil)
 	task.wait(Constants.REVEAL_TIME)
 
-	if PlayerState.countInState(Constants.STATE_SAFE) < Constants.MIN_PLAYERS then
+	if PlayerState.countInState(Constants.STATE_SAFE) < minPlayers then
 		endRound(Constants.REASON_ABORTED, {})
 		return
 	end
 
 	CombatSystem.start()
 	AbilitySystem.start()
+	BotSystem.start()
 
 	local roundEnd = os.clock() + Constants.ROUND_TIME
 	broadcastPhase(Constants.PHASE_ROUND, Constants.ROUND_TIME, nil)
 
-	while os.clock() < roundEnd do
+	local endWallTouched = false
+	if Constants.TEST_MODE then
+		bindTestEndWall(function()
+			endWallTouched = true
+		end)
+	end
+
+	while Constants.TEST_MODE or os.clock() < roundEnd do
 		task.wait(0.25)
 
-		if #Players:GetPlayers() < Constants.MIN_PLAYERS then
+		if #Players:GetPlayers() < minPlayers then
 			endRound(Constants.REASON_ABORTED, {})
 			return
 		end
 
-		if PlayerState.countInState(Constants.STATE_SAFE) <= 1 then
+		if Constants.TEST_MODE then
+			if endWallTouched or PlayerState.countInState(Constants.STATE_SAFE) < 1 then
+				endRound(Constants.REASON_SURVIVED, survivorNames())
+				return
+			end
+		elseif PlayerState.countInState(Constants.STATE_SAFE) <= 1 then
 			endRound(Constants.REASON_LAST_STANDING, survivorNames())
 			return
 		end
@@ -251,7 +289,7 @@ local function gameLoop()
 	while true do
 		broadcastPhase(Constants.PHASE_LOBBY)
 
-		while PlayerState.countInState(Constants.STATE_LOBBY) < Constants.MIN_PLAYERS do
+		while PlayerState.countInState(Constants.STATE_LOBBY) < minPlayers do
 			task.wait(1)
 		end
 
@@ -265,7 +303,7 @@ local function gameLoop()
 		broadcastPhase(Constants.PHASE_INTERMISSION, Constants.INTERMISSION_TIME)
 		task.wait(Constants.INTERMISSION_TIME)
 
-		if PlayerState.countInState(Constants.STATE_LOBBY) < Constants.MIN_PLAYERS then
+		if PlayerState.countInState(Constants.STATE_LOBBY) < minPlayers then
 			MapManager.unloadMap()
 			continue
 		end
@@ -274,14 +312,25 @@ local function gameLoop()
 	end
 end
 
-local function onPlayerEliminated(victim: Player, killer: Player?)
+local function combatantName(char: Model): string
+	local player = Players:GetPlayerFromCharacter(char)
+	if player then return player.Name end
+	return char.Name
+end
+
+local function onPlayerEliminated(victim: Model, killer: Model?)
 	if currentPhase ~= Constants.PHASE_ROUND then return end
 
-	local killerName: string? = if killer then killer.Name else nil
-	KillFeedRemote:FireAllClients(killerName, victim.Name)
+	local killerName: string? = if killer then combatantName(killer) else nil
+	KillFeedRemote:FireAllClients(killerName, combatantName(victim))
 
-	setLobby(victim)
-	MapManager.teleportToLobby(victim)
+	local victimPlayer = Players:GetPlayerFromCharacter(victim)
+	if victimPlayer then
+		setLobby(victimPlayer)
+		MapManager.teleportToLobby(victimPlayer)
+	elseif BotSystem.isBot(victim) then
+		BotSystem.remove(victim)
+	end
 end
 
 local function onCharacterAdded(player: Player, char: Model)
