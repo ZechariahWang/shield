@@ -1,4 +1,3 @@
-local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -150,29 +149,11 @@ local function reconcileVisibility()
 	end
 end
 
-local function buildFrame(parent: ScreenGui)
-	frame = Instance.new("Frame")
-	frame.Name = "Minimap"
-	frame.BackgroundColor3 = Constants.MINIMAP_BACKGROUND
-	frame.BackgroundTransparency = Constants.MINIMAP_BACKGROUND_TRANSPARENCY
-	frame.BorderSizePixel = 0
-	frame.ClipsDescendants = true
-	-- Square: the aspect constraint fits inside this box, and the height is the shorter side.
-	frame.Size = UDim2.fromScale(Constants.MINIMAP_SIZE, Constants.MINIMAP_SIZE)
-	local inset = GuiService:GetGuiInset()
-	frame.Position = UDim2.fromOffset(Constants.MINIMAP_MARGIN, inset.Y + Constants.MINIMAP_MARGIN)
-	frame.Visible = false
-	local ratio = Instance.new("UIAspectRatioConstraint")
-	ratio.AspectRatio = 1
-	ratio.DominantAxis = Enum.DominantAxis.Height
-	ratio.Parent = frame
-	frame.Parent = parent
-end
-
 function MinimapController.init()
 	local playerGui = localPlayer:WaitForChild("PlayerGui")
 	local gameGui = playerGui:WaitForChild("Game") :: ScreenGui
-	buildFrame(gameGui)
+	frame = gameGui:WaitForChild("Minimap") :: Frame
+	frame.Visible = false
 
 	local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 	local RoundStateRemote = Remotes:WaitForChild("RoundStateChanged") :: RemoteEvent
