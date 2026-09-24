@@ -18,9 +18,6 @@ export type AbilityDef = {
 
 local Abilities = {}
 
--- Every folder under ReplicatedStorage.Abilities is an ability: the folder name is
--- its id and HUD title, its AbilityIcon child is the HUD icon. Tune each ability
--- here, keyed by that folder name. Folders without an entry use DEFAULT_PARAMS.
 Abilities.Params = {
 	Dash = { cooldown = 3, duration = 0.2, velocity = 60 },
 	TestAbility = { cooldown = 5 },

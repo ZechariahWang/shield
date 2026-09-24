@@ -76,6 +76,20 @@ local function getFeedFrame(): GuiObject?
 	return nil
 end
 
+-- Rows stack down from the feed's top edge, oldest first; whenever a row leaves,
+-- the rows below tween up to close the gap.
+local function slotPosition(feed: GuiObject, rowHeight: number, slot: number): UDim2
+	local gap = feed.AbsoluteSize.Y * ROW_GAP
+	return UDim2.new(1, 0, 0, slot * (rowHeight + gap))
+end
+
+local function layoutEntries(feed: GuiObject)
+	for i, entry in activeEntries do
+		entry.targetPosition = slotPosition(feed, entry.row.AbsoluteSize.Y, i - 1)
+		TweenService:Create(entry.row, SHIFT_TWEEN, { Position = entry.targetPosition }):Play()
+	end
+end
+
 local function removeEntry(entry: Entry)
 	if entry.removing then return end
 	entry.removing = true
@@ -98,21 +112,7 @@ local function removeEntry(entry: Entry)
 	tween.Completed:Once(function()
 		if row then row:Destroy() end
 	end)
-end
-
--- Rows stack upward from the feed's bottom edge: the newest sits on the baseline,
--- older rows are pushed up one slot each time a kill lands.
-local function slotPosition(feed: GuiObject, rowHeight: number, slotFromBottom: number): UDim2
-	local gap = feed.AbsoluteSize.Y * ROW_GAP
-	return UDim2.new(1, 0, 1, -slotFromBottom * (rowHeight + gap))
-end
-
-local function layoutEntries(feed: GuiObject)
-	local count = #activeEntries
-	for i, entry in activeEntries do
-		entry.targetPosition = slotPosition(feed, entry.row.AbsoluteSize.Y, count - i)
-		TweenService:Create(entry.row, SHIFT_TWEEN, { Position = entry.targetPosition }):Play()
-	end
+	layoutEntries(row.Parent :: GuiObject)
 end
 
 local function animateIn(entry: Entry)
@@ -146,7 +146,7 @@ local function addEntry(text: string)
 
 	label.RichText = true
 	label.Text = text
-	row.AnchorPoint = Vector2.new(1, 1)
+	row.AnchorPoint = Vector2.new(1, 0)
 	row.Visible = true
 	row.Parent = feed
 
