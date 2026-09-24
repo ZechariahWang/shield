@@ -81,7 +81,6 @@ local scrim: TextButton
 local scrimGen = 0
 local lobbyButtons: GuiObject
 local localState = Constants.STATE_LOBBY
-local currentPhase = Constants.PHASE_LOBBY
 
 local ShopStateRemote: RemoteEvent
 local ShopPurchaseRemote: RemoteEvent
@@ -412,12 +411,12 @@ local function toggleModal(target: Modal)
 	end
 end
 
--- Alive players in the arena lose the lobby UI; eliminated spectators keep it.
+-- The lobby UI exists only for players standing in the lobby: the state flips to
+-- Lobby on elimination and after the round-end teleport, and to Safe at Reveal.
 local function reconcileLobbyUI()
-	local inCombatPhase = currentPhase == Constants.PHASE_REVEAL or currentPhase == Constants.PHASE_ROUND
-	local inCombat = localState == Constants.STATE_SAFE and inCombatPhase
-	lobbyButtons.Visible = not inCombat
-	if inCombat then
+	local inLobby = localState == Constants.STATE_LOBBY
+	lobbyButtons.Visible = inLobby
+	if not inLobby then
 		closeAll()
 	end
 end
@@ -528,7 +527,6 @@ function ShopController.init()
 	ShopStateRemote = Remotes:WaitForChild("ShopState") :: RemoteEvent
 	ShopPurchaseRemote = Remotes:WaitForChild("ShopPurchase") :: RemoteEvent
 	ShopEquipRemote = Remotes:WaitForChild("ShopEquip") :: RemoteEvent
-	local RoundStateRemote = Remotes:WaitForChild("RoundStateChanged") :: RemoteEvent
 	local PlayerStateRemote = Remotes:WaitForChild("PlayerStateChanged") :: RemoteEvent
 
 	local items = loadItems()
@@ -557,10 +555,6 @@ function ShopController.init()
 		refreshAll()
 	end)
 
-	RoundStateRemote.OnClientEvent:Connect(function(phase: string)
-		currentPhase = phase
-		reconcileLobbyUI()
-	end)
 	PlayerStateRemote.OnClientEvent:Connect(function(player: Player, state: string)
 		if player ~= Players.LocalPlayer then return end
 		localState = state

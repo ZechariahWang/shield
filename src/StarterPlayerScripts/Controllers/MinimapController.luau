@@ -138,7 +138,7 @@ local function update()
 end
 
 local function reconcileVisibility()
-	local show = currentPhase == Constants.PHASE_ROUND
+	local show = currentPhase == Constants.PHASE_REVEAL or currentPhase == Constants.PHASE_ROUND
 	if show then
 		bounds = computeBounds()
 		show = bounds ~= nil
