@@ -14,19 +14,28 @@ local PRESS_SCALE = 0.95
 local IDLE_TRANSPARENCY = 0.25
 local HOVER_TRANSPARENCY = 0.05
 
--- Modal look (matches the Studio-authored lobby buttons)
+-- Modal look: the same flat, sharp slab as the Studio-authored lobby buttons
+-- (dark warm panel, orange accent bar beside the text, heavy italic type, no strokes).
 local FONT = Font.new("rbxasset://fonts/families/Roboto.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic)
 local PANEL_COLOR = Color3.fromRGB(20, 12, 8)
-local CARD_COLOR = Color3.fromRGB(34, 22, 14)
+local PANEL_TRANSPARENCY = 0.05
+local CARD_COLOR = Color3.fromRGB(36, 24, 16)
+local INSET_COLOR = Color3.fromRGB(14, 9, 6)
 local TEXT_COLOR = Color3.fromRGB(255, 245, 220)
 local ACCENT_COLOR = Color3.fromRGB(255, 159, 80)
 local DIM_COLOR = Color3.fromRGB(120, 105, 90)
+local MUTED_BUTTON_COLOR = Color3.fromRGB(52, 40, 32)
+local UNAFFORDABLE_TRANSPARENCY = 0.55
+local SCRIM_TRANSPARENCY = 0.45
+local HOVER_LIFT = 0.15 -- how far a hovered button's color moves toward white
+local ACCENT_BAR_WIDTH = 4
 local MODAL_SIZE = UDim2.fromScale(0.6, 0.65)
 local MODAL_POSITION = UDim2.fromScale(0.5, 0.5)
 local MODAL_CLOSED_SCALE = 0.85
 local MODAL_CLOSED_DRIFT = UDim2.fromScale(0, 0.04)   -- closed pose sits slightly below the open one
 local MODAL_OPEN_TWEEN = TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local MODAL_CLOSE_TWEEN = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+local TAB_TWEEN = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local CARD_SIZE = UDim2.fromScale(0.31, 0.5)
 local CARD_PADDING = UDim2.fromScale(0.02, 0.03)
 
@@ -39,13 +48,14 @@ local KIND_WEAPON = "Weapon"
 local KIND_ABILITY = "Ability"
 local KINDS = { KIND_WEAPON, KIND_ABILITY }
 local TAB_TITLES = { [KIND_WEAPON] = "WEAPONS", [KIND_ABILITY] = "ABILITIES" }
+local TAB_X = { [KIND_WEAPON] = 0.34, [KIND_ABILITY] = 0.5 }
 local CATALOG_FOLDERS = { [KIND_WEAPON] = "Weapons", [KIND_ABILITY] = "Abilities" }
 
 local MODE_SHOP = "Shop"
 local MODE_INVENTORY = "Inventory"
 
 type Item = { kind: string, name: string, template: Instance }
-type Card = { item: Item, frame: Frame, price: TextLabel, action: TextButton, cost: number }
+type Card = { item: Item, frame: Frame, price: TextLabel, action: TextButton, cost: number, baseColor: Color3 }
 type Modal = {
 	mode: string,
 	frame: Frame,
@@ -53,6 +63,7 @@ type Modal = {
 	open: boolean,
 	animGen: number,
 	tabs: { [string]: TextButton },
+	tabUnderline: Frame,
 	grids: { [string]: ScrollingFrame },
 	cards: { Card },
 	coinsLabel: TextLabel?,
@@ -64,6 +75,8 @@ local ownedAbilities: { [string]: boolean } = {}
 local equippedWeapon = Constants.VIEWMODEL_DEFAULT_WEAPON
 
 local modals: { Modal } = {}
+local scrim: TextButton
+local scrimGen = 0
 
 local ShopStateRemote: RemoteEvent
 local ShopPurchaseRemote: RemoteEvent
@@ -122,6 +135,8 @@ local function textButton(parent: Instance, text: string, size: UDim2, position:
 	local b = Instance.new("TextButton")
 	b.Size = size
 	b.Position = position
+	b.BorderSizePixel = 0
+	b.AutoButtonColor = false
 	b.FontFace = FONT
 	b.TextScaled = true
 	b.Text = text
@@ -129,10 +144,24 @@ local function textButton(parent: Instance, text: string, size: UDim2, position:
 	return b
 end
 
-local function corner(parent: Instance, radius: number)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, radius)
-	c.Parent = parent
+local function block(parent: Instance, color: Color3, size: UDim2, position: UDim2): Frame
+	local f = Instance.new("Frame")
+	f.BackgroundColor3 = color
+	f.BorderSizePixel = 0
+	f.Size = size
+	f.Position = position
+	f.Parent = parent
+	return f
+end
+
+-- Text-only buttons (tabs, close) brighten on hover; filled buttons lift their fill.
+local function hoverText(button: TextButton, idle: () -> Color3)
+	button.MouseEnter:Connect(function()
+		TweenService:Create(button, TWEEN_INFO, { TextColor3 = TEXT_COLOR }):Play()
+	end)
+	button.MouseLeave:Connect(function()
+		TweenService:Create(button, TWEEN_INFO, { TextColor3 = idle() }):Play()
+	end)
 end
 
 local function itemPrice(template: Instance): number
@@ -169,7 +198,7 @@ end
 local function buildWeaponPreview(parent: Instance, template: Model)
 	local viewport = Instance.new("ViewportFrame")
 	viewport.BackgroundTransparency = 1
-	viewport.Size = UDim2.fromScale(1, 0.55)
+	viewport.Size = UDim2.fromScale(1, 1)
 	viewport.LightDirection = Vector3.new(-1, -1, -1)
 	viewport.Ambient = Color3.fromRGB(130, 130, 130)
 	viewport.Parent = parent
@@ -199,8 +228,8 @@ local function buildAbilityPreview(parent: Instance, template: Instance)
 	local icon = Instance.new("ImageLabel")
 	icon.BackgroundTransparency = 1
 	icon.AnchorPoint = Vector2.new(0.5, 0.5)
-	icon.Position = UDim2.fromScale(0.5, 0.28)
-	icon.Size = UDim2.fromScale(0.4, 0.4)
+	icon.Position = UDim2.fromScale(0.5, 0.5)
+	icon.Size = UDim2.fromScale(0.7, 0.7)
 	icon.ScaleType = Enum.ScaleType.Fit
 	local source = template:FindFirstChild("AbilityIcon")
 	if source and source:IsA("ImageLabel") then
@@ -224,31 +253,41 @@ local function onCardActivated(modal: Modal, card: Card)
 end
 
 local function buildCard(modal: Modal, item: Item)
-	local card = Instance.new("Frame")
+	local card = block(modal.grids[item.kind], CARD_COLOR, UDim2.new(), UDim2.new())
 	card.Name = item.name
-	card.BackgroundColor3 = CARD_COLOR
-	card.Parent = modal.grids[item.kind]
-	corner(card, 6)
 
+	local inset = block(card, INSET_COLOR, UDim2.fromScale(0.9, 0.5), UDim2.fromScale(0.05, 0.05))
 	if item.kind == KIND_WEAPON then
-		buildWeaponPreview(card, item.template :: Model)
+		buildWeaponPreview(inset, item.template :: Model)
 	else
-		buildAbilityPreview(card, item.template)
+		buildAbilityPreview(inset, item.template)
 	end
-	label(card, item.name, UDim2.fromScale(0.9, 0.14), UDim2.fromScale(0.05, 0.56), Enum.TextXAlignment.Left)
-	local price = label(card, "", UDim2.fromScale(0.9, 0.1), UDim2.fromScale(0.05, 0.7), Enum.TextXAlignment.Left)
+	label(card, item.name, UDim2.fromScale(0.9, 0.13), UDim2.fromScale(0.05, 0.58), Enum.TextXAlignment.Left)
+	local price = label(card, "", UDim2.fromScale(0.9, 0.09), UDim2.fromScale(0.05, 0.71), Enum.TextXAlignment.Left)
 	price.TextColor3 = ACCENT_COLOR
 
-	local action = textButton(card, "", UDim2.fromScale(0.9, 0.14), UDim2.fromScale(0.05, 0.83))
-	action.BackgroundColor3 = ACCENT_COLOR
+	local action = textButton(card, "", UDim2.fromScale(0.9, 0.13), UDim2.fromScale(0.05, 0.83))
 	action.TextColor3 = PANEL_COLOR
-	corner(action, 4)
 
-	local record: Card = { item = item, frame = card, price = price, action = action, cost = itemPrice(item.template) }
+	local record: Card = { item = item, frame = card, price = price, action = action, cost = itemPrice(item.template), baseColor = ACCENT_COLOR }
 	action.Activated:Connect(function()
 		onCardActivated(modal, record)
 	end)
+	action.MouseEnter:Connect(function()
+		TweenService:Create(action, TWEEN_INFO, { BackgroundColor3 = record.baseColor:Lerp(Color3.new(1, 1, 1), HOVER_LIFT) }):Play()
+	end)
+	action.MouseLeave:Connect(function()
+		TweenService:Create(action, TWEEN_INFO, { BackgroundColor3 = record.baseColor }):Play()
+	end)
 	table.insert(modal.cards, record)
+end
+
+local function styleAction(card: Card, text: string, color: Color3, textColor: Color3, transparency: number)
+	card.action.Text = text
+	card.baseColor = color
+	card.action.BackgroundColor3 = color
+	card.action.TextColor3 = textColor
+	card.action.BackgroundTransparency = transparency
 end
 
 local function refreshCard(modal: Modal, card: Card)
@@ -257,12 +296,11 @@ local function refreshCard(modal: Modal, card: Card)
 		card.frame.Visible = true
 		if owned then
 			card.price.Text = "OWNED"
-			card.action.Text = "OWNED"
-			card.action.BackgroundColor3 = DIM_COLOR
+			styleAction(card, "OWNED", MUTED_BUTTON_COLOR, DIM_COLOR, 0)
 		else
 			card.price.Text = card.cost .. " COINS"
-			card.action.Text = "BUY"
-			card.action.BackgroundColor3 = if coins >= card.cost then ACCENT_COLOR else DIM_COLOR
+			local transparency = if coins >= card.cost then 0 else UNAFFORDABLE_TRANSPARENCY
+			styleAction(card, "BUY", ACCENT_COLOR, PANEL_COLOR, transparency)
 		end
 		return
 	end
@@ -270,21 +308,18 @@ local function refreshCard(modal: Modal, card: Card)
 	card.frame.Visible = owned
 	card.price.Text = ""
 	if card.item.kind ~= KIND_WEAPON then
-		card.action.Text = "OWNED"
-		card.action.BackgroundColor3 = DIM_COLOR
+		styleAction(card, "OWNED", MUTED_BUTTON_COLOR, DIM_COLOR, 0)
 	elseif equippedWeapon == card.item.name then
-		card.action.Text = "EQUIPPED"
-		card.action.BackgroundColor3 = DIM_COLOR
+		styleAction(card, "EQUIPPED", MUTED_BUTTON_COLOR, DIM_COLOR, 0)
 	else
-		card.action.Text = "EQUIP"
-		card.action.BackgroundColor3 = ACCENT_COLOR
+		styleAction(card, "EQUIP", ACCENT_COLOR, PANEL_COLOR, 0)
 	end
 end
 
 local function refreshAll()
 	for _, modal in modals do
 		if modal.coinsLabel then
-			modal.coinsLabel.Text = "COINS " .. coins
+			modal.coinsLabel.Text = tostring(coins)
 		end
 		for _, card in modal.cards do
 			refreshCard(modal, card)
@@ -296,8 +331,30 @@ local function setTab(modal: Modal, kind: string)
 	for _, k in KINDS do
 		local active = k == kind
 		modal.grids[k].Visible = active
-		modal.tabs[k].TextColor3 = if active then ACCENT_COLOR else DIM_COLOR
+		modal.tabs[k].TextColor3 = if active then TEXT_COLOR else DIM_COLOR
 	end
+	TweenService:Create(modal.tabUnderline, TAB_TWEEN, { Position = UDim2.fromScale(TAB_X[kind], 0.125) }):Play()
+end
+
+local function updateScrim()
+	local anyOpen = false
+	for _, modal in modals do
+		if modal.open then anyOpen = true end
+	end
+	scrimGen += 1
+	local gen = scrimGen
+	if anyOpen then
+		scrim.Visible = true
+		TweenService:Create(scrim, MODAL_OPEN_TWEEN, { BackgroundTransparency = SCRIM_TRANSPARENCY }):Play()
+		return
+	end
+	local tween = TweenService:Create(scrim, MODAL_CLOSE_TWEEN, { BackgroundTransparency = 1 })
+	tween.Completed:Once(function()
+		if gen == scrimGen then
+			scrim.Visible = false
+		end
+	end)
+	tween:Play()
 end
 
 local function setModalOpen(modal: Modal, open: boolean)
@@ -306,6 +363,7 @@ local function setModalOpen(modal: Modal, open: boolean)
 	modal.animGen += 1
 	local gen = modal.animGen
 	local frame = modal.frame
+	updateScrim()
 
 	if open then
 		frame.Visible = true
@@ -326,6 +384,12 @@ local function setModalOpen(modal: Modal, open: boolean)
 	tween:Play()
 end
 
+local function closeAll()
+	for _, modal in modals do
+		setModalOpen(modal, false)
+	end
+end
+
 local function openModal(target: Modal)
 	for _, modal in modals do
 		if modal ~= target then
@@ -343,24 +407,27 @@ local function toggleModal(target: Modal)
 	end
 end
 
+local function buildScrim(parent: ScreenGui)
+	scrim = textButton(parent, "", UDim2.fromScale(1, 1), UDim2.new())
+	scrim.Name = "Scrim"
+	scrim.BackgroundColor3 = Color3.new(0, 0, 0)
+	scrim.BackgroundTransparency = 1
+	scrim.Visible = false
+	scrim.ZIndex = 0 -- under the lobby buttons so they still toggle, above everything else
+	scrim.Activated:Connect(closeAll)
+end
+
 local function buildModal(parent: ScreenGui, title: string, mode: string, items: { Item }): Modal
-	local frame = Instance.new("Frame")
+	local frame = block(parent, PANEL_COLOR, MODAL_SIZE, MODAL_POSITION)
 	frame.Name = title .. "Modal"
 	frame.AnchorPoint = Vector2.new(0.5, 0.5)
-	frame.Position = MODAL_POSITION
-	frame.Size = MODAL_SIZE
-	frame.BackgroundColor3 = PANEL_COLOR
+	frame.BackgroundTransparency = PANEL_TRANSPARENCY
 	frame.Visible = false
 	frame.ZIndex = 10
-	frame.Parent = parent
-	corner(frame, 8)
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = ACCENT_COLOR
-	stroke.Thickness = 2
-	stroke.Parent = frame
 	local scale = Instance.new("UIScale")
 	scale.Parent = frame
 
+	local underline = block(frame, ACCENT_COLOR, UDim2.new(0.08, 0, 0, 3), UDim2.fromScale(TAB_X[KIND_WEAPON], 0.125))
 	local modal: Modal = {
 		mode = mode,
 		frame = frame,
@@ -368,26 +435,31 @@ local function buildModal(parent: ScreenGui, title: string, mode: string, items:
 		open = false,
 		animGen = 0,
 		tabs = {},
+		tabUnderline = underline,
 		grids = {},
 		cards = {},
 		coinsLabel = nil,
 	}
 
-	label(frame, title:upper(), UDim2.fromScale(0.26, 0.1), UDim2.fromScale(0.04, 0.03), Enum.TextXAlignment.Left)
+	block(frame, ACCENT_COLOR, UDim2.new(0, ACCENT_BAR_WIDTH, 0.08, 0), UDim2.fromScale(0.04, 0.045))
+	label(frame, title:upper(), UDim2.fromScale(0.24, 0.08), UDim2.fromScale(0.055, 0.045), Enum.TextXAlignment.Left)
 
-	for i, kind in KINDS do
-		local tab = textButton(frame, TAB_TITLES[kind], UDim2.fromScale(0.15, 0.06), UDim2.fromScale(0.32 + (i - 1) * 0.16, 0.055))
+	for _, kind in KINDS do
+		local tab = textButton(frame, TAB_TITLES[kind], UDim2.fromScale(0.14, 0.055), UDim2.fromScale(TAB_X[kind], 0.06))
 		tab.BackgroundTransparency = 1
 		tab.TextXAlignment = Enum.TextXAlignment.Left
 		tab.Activated:Connect(function()
 			setTab(modal, kind)
 		end)
+		hoverText(tab, function()
+			return if modal.grids[kind].Visible then TEXT_COLOR else DIM_COLOR
+		end)
 		modal.tabs[kind] = tab
 
 		local grid = Instance.new("ScrollingFrame")
 		grid.Name = kind .. "Grid"
-		grid.Size = UDim2.fromScale(0.92, 0.8)
-		grid.Position = UDim2.fromScale(0.04, 0.16)
+		grid.Size = UDim2.fromScale(0.92, 0.78)
+		grid.Position = UDim2.fromScale(0.04, 0.17)
 		grid.BackgroundTransparency = 1
 		grid.BorderSizePixel = 0
 		grid.ScrollBarThickness = 4
@@ -403,15 +475,20 @@ local function buildModal(parent: ScreenGui, title: string, mode: string, items:
 	end
 
 	if mode == MODE_SHOP then
-		local coinsLabel = label(frame, "COINS 0", UDim2.fromScale(0.25, 0.07), UDim2.fromScale(0.64, 0.045), Enum.TextXAlignment.Right)
+		local coinsLabel = label(frame, "0", UDim2.fromScale(0.14, 0.06), UDim2.fromScale(0.74, 0.055), Enum.TextXAlignment.Right)
 		coinsLabel.TextColor3 = ACCENT_COLOR
 		modal.coinsLabel = coinsLabel
+		local coin = block(frame, ACCENT_COLOR, UDim2.fromOffset(10, 10), UDim2.fromScale(0.89, 0.085))
+		coin.AnchorPoint = Vector2.new(0, 0.5)
 	end
 
-	local close = textButton(frame, "X", UDim2.fromScale(0.06, 0.09), UDim2.fromScale(0.97, 0.03))
+	local close = textButton(frame, "X", UDim2.fromScale(0.05, 0.07), UDim2.fromScale(0.965, 0.05))
 	close.AnchorPoint = Vector2.new(1, 0)
 	close.BackgroundTransparency = 1
-	close.TextColor3 = TEXT_COLOR
+	close.TextColor3 = DIM_COLOR
+	hoverText(close, function()
+		return DIM_COLOR
+	end)
 	close.Activated:Connect(function()
 		setModalOpen(modal, false)
 	end)
@@ -438,6 +515,7 @@ function ShopController.init()
 	local RoundStateRemote = Remotes:WaitForChild("RoundStateChanged") :: RemoteEvent
 
 	local items = loadItems()
+	buildScrim(lobbyGui)
 	local shop = buildModal(lobbyGui, "Shop", MODE_SHOP, items)
 	local inventory = buildModal(lobbyGui, "Inventory", MODE_INVENTORY, items)
 	bindLobbyButton(shopButton, function()
@@ -465,9 +543,7 @@ function ShopController.init()
 	-- Combat takes the mouse, so no modal can stay open into a round.
 	RoundStateRemote.OnClientEvent:Connect(function(phase: string)
 		if phase == Constants.PHASE_REVEAL then
-			for _, modal in modals do
-				setModalOpen(modal, false)
-			end
+			closeAll()
 		end
 	end)
 
