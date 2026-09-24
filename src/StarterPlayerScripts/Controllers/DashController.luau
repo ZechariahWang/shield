@@ -3,6 +3,7 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
+local Abilities = require(ReplicatedStorage.Shared.Abilities)
 local AbilityHUDController = require(script.Parent.AbilityHUDController)
 
 local DashController = {}
@@ -24,7 +25,7 @@ end
 local function tryDash()
 	if not canDash() then return end
 	local now = os.clock()
-	if now - lastDash < Constants.DASH_COOLDOWN then return end
+	if now - lastDash < Abilities.params("Dash").cooldown then return end
 	lastDash = now
 	DashRequestRemote:FireServer()
 	AbilityHUDController.triggerCooldown("Dash")

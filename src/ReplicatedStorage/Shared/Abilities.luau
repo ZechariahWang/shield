@@ -1,37 +1,70 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
 local Constants = require(script.Parent.Constants)
+
+export type AbilityParams = {
+	cooldown: number,
+	duration: number?,
+	velocity: number?,
+}
 
 export type AbilityDef = {
 	id: string,
 	displayName: string,
-	cooldown: number,
-	iconName: string,
+	icon: string,
+	iconColor: Color3,
+	params: AbilityParams,
 }
 
 local Abilities = {}
 
-Abilities.CATEGORY_SURVIVOR = "Survivor"
+-- Every folder under ReplicatedStorage.Abilities is an ability: the folder name is
+-- its id and HUD title, its AbilityIcon child is the HUD icon. Tune each ability
+-- here, keyed by that folder name. Folders without an entry use DEFAULT_PARAMS.
+Abilities.Params = {
+	Dash = { cooldown = 3, duration = 0.2, velocity = 60 },
+	TestAbility = { cooldown = 5 },
+} :: { [string]: AbilityParams }
 
-Abilities.Defs = {
-	Dash = {
-		id = "Dash",
-		displayName = "DASH",
-		cooldown = Constants.DASH_COOLDOWN,
-		iconName = "Dash",
-	},
-} :: { [string]: AbilityDef }
+Abilities.DEFAULT_PARAMS = { cooldown = 3 } :: AbilityParams
+
+Abilities.CATEGORY_SURVIVOR = "Survivor"
 
 Abilities.Categories = {
 	[Abilities.CATEGORY_SURVIVOR] = { "Dash" },
 } :: { [string]: { string } }
 
+function Abilities.params(id: string): AbilityParams
+	return Abilities.Params[id] or Abilities.DEFAULT_PARAMS
+end
+
 function Abilities.get(id: string): AbilityDef?
-	return Abilities.Defs[id]
+	local root = ReplicatedStorage:FindFirstChild("Abilities")
+	if not root then return nil end
+	local folder = root:FindFirstChild(id)
+	if not folder then return nil end
+
+	local icon = folder:FindFirstChild("AbilityIcon")
+	local image = ""
+	local color = Color3.new(1, 1, 1)
+	if icon and icon:IsA("ImageLabel") then
+		image = icon.Image
+		color = icon.ImageColor3
+	end
+
+	return {
+		id = id,
+		displayName = folder.Name,
+		icon = image,
+		iconColor = color,
+		params = Abilities.params(id),
+	}
 end
 
 function Abilities.primaryFor(category: string): AbilityDef?
 	local ids = Abilities.Categories[category]
 	if not ids or #ids == 0 then return nil end
-	return Abilities.Defs[ids[1]]
+	return Abilities.get(ids[1])
 end
 
 function Abilities.categoryForState(state: string): string?

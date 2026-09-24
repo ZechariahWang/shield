@@ -85,11 +85,6 @@ Constants.WEAPON_GRIPS = {
 	Pistol = CFrame.new(0, -0.99, 0.09, 0, 0, 1, -1, 0, 0, 0, -1, 0),
 }
 
--- DASH
-Constants.DASH_COOLDOWN = 3
-Constants.DASH_DURATION = 0.2
-Constants.DASH_VELOCITY = 60
-
 -- PLAYER STATES
 Constants.STATE_LOBBY = "Lobby"     -- also used for eliminated players (spectating from the lobby)
 Constants.STATE_SAFE = "Safe"       -- alive in the arena

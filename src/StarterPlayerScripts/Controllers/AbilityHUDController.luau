@@ -81,26 +81,11 @@ local function cancelCooldownTween()
 	end
 end
 
-local function getIconImage(iconName: string): (string?, Color3?)
-	local assets = ReplicatedStorage:FindFirstChild("Assets")
-	if not assets then return nil, nil end
-	local iconsFolder = assets:FindFirstChild("Icons")
-	if not iconsFolder then return nil, nil end
-	local source = iconsFolder:FindFirstChild(iconName)
-	if not source or not source:IsA("ImageLabel") then return nil, nil end
-	return source.Image, source.ImageColor3
-end
-
 local function applyAbility(ability: Abilities.AbilityDef)
 	resolveElements()
 	if iconLabel then
-		local image, color = getIconImage(ability.iconName)
-		if image then
-			iconLabel.Image = image
-		end
-		if color then
-			iconLabel.ImageColor3 = color
-		end
+		iconLabel.Image = ability.icon
+		iconLabel.ImageColor3 = ability.iconColor
 	end
 	if titleLabel then
 		titleLabel.Text = ability.displayName
@@ -153,7 +138,7 @@ function AbilityHUDController.triggerCooldown(abilityId: string)
 
 	local tween = TweenService:Create(
 		overlay,
-		TweenInfo.new(ability.cooldown, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+		TweenInfo.new(ability.params.cooldown, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
 		{ Size = UDim2.new(1, 0, 0, 0) }
 	)
 	activeTween = tween

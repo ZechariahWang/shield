@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
+local Abilities = require(ReplicatedStorage.Shared.Abilities)
 local PlayerState = require(script.Parent.PlayerState)
 
 local AbilitySystem = {}
@@ -16,8 +17,9 @@ local function dash(player: Player)
 		return
 	end
 
+	local params = Abilities.params("Dash")
 	local now = os.clock()
-	if now - (lastDash[player] or 0) < Constants.DASH_COOLDOWN then
+	if now - (lastDash[player] or 0) < params.cooldown then
 		return
 	end
 
@@ -49,10 +51,10 @@ local function dash(player: Player)
 	lv.Attachment0 = attachment
 	lv.MaxForce = math.huge
 	lv.RelativeTo = Enum.ActuatorRelativeTo.World
-	lv.VectorVelocity = horizontal * Constants.DASH_VELOCITY
+	lv.VectorVelocity = horizontal * (params.velocity or 0)
 	lv.Parent = root
 
-	task.delay(Constants.DASH_DURATION, function()
+	task.delay(params.duration or 0, function()
 		if lv and lv.Parent then lv:Destroy() end
 		if attachment and attachment.Parent then attachment:Destroy() end
 	end)
