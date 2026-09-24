@@ -5,9 +5,11 @@ local TweenService = game:GetService("TweenService")
 local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
+local Workspace = game:GetService("Workspace")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local CombatController = require(script.Parent.CombatController)
+local ShiftLockController = require(script.Parent.ShiftLockController)
 local CombatFeedbackController = {}
 local localPlayer = Players.LocalPlayer
 
@@ -176,7 +178,9 @@ end
 
 local function crosshairFollowStep()
 	if not crosshair then return end
-	local mouse = UserInputService:GetMouseLocation()
+	-- Under shift lock the crosshair sits at the screen center regardless of what the OS cursor reports.
+	local camera = Workspace.CurrentCamera
+	local mouse = if ShiftLockController.isLocked() and camera then camera.ViewportSize / 2 else UserInputService:GetMouseLocation()
 	local inset = if screenGui.IgnoreGuiInset then Vector2.zero else GuiService:GetGuiInset()
 	crosshair.Position = UDim2.fromOffset(mouse.X - inset.X, mouse.Y - inset.Y)
 end
@@ -326,15 +330,17 @@ local function shakeStep(dt: number)
 	local hum = getLocalHumanoid()
 	if not hum then return end
 
+	-- Shake is additive on top of the shift-lock shoulder offset, and settles back to it.
+	local base = ShiftLockController.baseCameraOffset()
 	if shakeIntensity <= 0.001 then
-		if hum.CameraOffset.Magnitude > 0.001 then
-			hum.CameraOffset = Vector3.zero
+		if (hum.CameraOffset - base).Magnitude > 0.001 then
+			hum.CameraOffset = base
 		end
 		return
 	end
 
 	local i = shakeIntensity
-	hum.CameraOffset = Vector3.new(
+	hum.CameraOffset = base + Vector3.new(
 		(math.random() - 0.5) * 2 * i,
 		(math.random() - 0.5) * 2 * i,
 		(math.random() - 0.5) * 2 * i

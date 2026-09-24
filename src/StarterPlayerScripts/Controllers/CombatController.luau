@@ -5,6 +5,7 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
+local ShiftLockController = require(script.Parent.ShiftLockController)
 
 local CombatController = {}
 
@@ -138,8 +139,9 @@ local function getAimDirection(headPosition: Vector3): Vector3?
 	local camera = Workspace.CurrentCamera
 	if not camera then return nil end
 
-	local mouse = UserInputService:GetMouseLocation()
-	local ray = camera:ViewportPointToRay(mouse.X, mouse.Y)
+	-- Under shift lock the aim point is the screen center regardless of what the OS cursor reports.
+	local point = if ShiftLockController.isLocked() then camera.ViewportSize / 2 else UserInputService:GetMouseLocation()
+	local ray = camera:ViewportPointToRay(point.X, point.Y)
 
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
