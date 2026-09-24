@@ -22,6 +22,11 @@ local TEXT_COLOR = Color3.fromRGB(255, 245, 220)
 local ACCENT_COLOR = Color3.fromRGB(255, 159, 80)
 local DIM_COLOR = Color3.fromRGB(120, 105, 90)
 local MODAL_SIZE = UDim2.fromScale(0.6, 0.65)
+local MODAL_POSITION = UDim2.fromScale(0.5, 0.5)
+local MODAL_CLOSED_SCALE = 0.85
+local MODAL_CLOSED_DRIFT = UDim2.fromScale(0, 0.04)   -- closed pose sits slightly below the open one
+local MODAL_OPEN_TWEEN = TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local MODAL_CLOSE_TWEEN = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 local CARD_SIZE = UDim2.fromScale(0.31, 0.5)
 local CARD_PADDING = UDim2.fromScale(0.02, 0.03)
 
@@ -44,6 +49,9 @@ type Card = { item: Item, frame: Frame, price: TextLabel, action: TextButton, co
 type Modal = {
 	mode: string,
 	frame: Frame,
+	scale: UIScale,
+	open: boolean,
+	animGen: number,
 	tabs: { [string]: TextButton },
 	grids: { [string]: ScrollingFrame },
 	cards: { Card },
@@ -292,16 +300,44 @@ local function setTab(modal: Modal, kind: string)
 	end
 end
 
+local function setModalOpen(modal: Modal, open: boolean)
+	if modal.open == open then return end
+	modal.open = open
+	modal.animGen += 1
+	local gen = modal.animGen
+	local frame = modal.frame
+
+	if open then
+		frame.Visible = true
+		modal.scale.Scale = MODAL_CLOSED_SCALE
+		frame.Position = MODAL_POSITION + MODAL_CLOSED_DRIFT
+		TweenService:Create(modal.scale, MODAL_OPEN_TWEEN, { Scale = 1 }):Play()
+		TweenService:Create(frame, MODAL_OPEN_TWEEN, { Position = MODAL_POSITION }):Play()
+		return
+	end
+
+	TweenService:Create(modal.scale, MODAL_CLOSE_TWEEN, { Scale = MODAL_CLOSED_SCALE }):Play()
+	local tween = TweenService:Create(frame, MODAL_CLOSE_TWEEN, { Position = MODAL_POSITION + MODAL_CLOSED_DRIFT })
+	tween.Completed:Once(function()
+		if gen == modal.animGen then
+			frame.Visible = false
+		end
+	end)
+	tween:Play()
+end
+
 local function openModal(target: Modal)
 	for _, modal in modals do
-		modal.frame.Visible = false
+		if modal ~= target then
+			setModalOpen(modal, false)
+		end
 	end
-	target.frame.Visible = true
+	setModalOpen(target, true)
 end
 
 local function toggleModal(target: Modal)
-	if target.frame.Visible then
-		target.frame.Visible = false
+	if target.open then
+		setModalOpen(target, false)
 	else
 		openModal(target)
 	end
@@ -311,7 +347,7 @@ local function buildModal(parent: ScreenGui, title: string, mode: string, items:
 	local frame = Instance.new("Frame")
 	frame.Name = title .. "Modal"
 	frame.AnchorPoint = Vector2.new(0.5, 0.5)
-	frame.Position = UDim2.fromScale(0.5, 0.5)
+	frame.Position = MODAL_POSITION
 	frame.Size = MODAL_SIZE
 	frame.BackgroundColor3 = PANEL_COLOR
 	frame.Visible = false
@@ -322,8 +358,20 @@ local function buildModal(parent: ScreenGui, title: string, mode: string, items:
 	stroke.Color = ACCENT_COLOR
 	stroke.Thickness = 2
 	stroke.Parent = frame
+	local scale = Instance.new("UIScale")
+	scale.Parent = frame
 
-	local modal: Modal = { mode = mode, frame = frame, tabs = {}, grids = {}, cards = {}, coinsLabel = nil }
+	local modal: Modal = {
+		mode = mode,
+		frame = frame,
+		scale = scale,
+		open = false,
+		animGen = 0,
+		tabs = {},
+		grids = {},
+		cards = {},
+		coinsLabel = nil,
+	}
 
 	label(frame, title:upper(), UDim2.fromScale(0.26, 0.1), UDim2.fromScale(0.04, 0.03), Enum.TextXAlignment.Left)
 
@@ -365,7 +413,7 @@ local function buildModal(parent: ScreenGui, title: string, mode: string, items:
 	close.BackgroundTransparency = 1
 	close.TextColor3 = TEXT_COLOR
 	close.Activated:Connect(function()
-		frame.Visible = false
+		setModalOpen(modal, false)
 	end)
 
 	for _, item in items do
@@ -418,7 +466,7 @@ function ShopController.init()
 	RoundStateRemote.OnClientEvent:Connect(function(phase: string)
 		if phase == Constants.PHASE_REVEAL then
 			for _, modal in modals do
-				modal.frame.Visible = false
+				setModalOpen(modal, false)
 			end
 		end
 	end)

@@ -12,6 +12,11 @@ local DISPLAY_TIME = 4
 local FADE_IN_TIME = 0.25
 local FADE_OUT_TIME = 0.4
 local SLIDE_OFFSET = 80
+local SHIFT_TIME = 0.2          -- rows sliding up to make room for a new one
+local ROW_GAP = 0.012           -- fraction of the feed height between rows
+local SLIDE_OUT_MARGIN = 48     -- px past the row width so an exiting row clears the screen edge
+
+local SHIFT_TWEEN = TweenInfo.new(SHIFT_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local KILLER_COLOR = "rgb(255,159,80)"
 local VERB_TRANSPARENCY = 0.4
@@ -25,7 +30,7 @@ type Entry = {
 	originalTextTransparency: number,
 	originalStrokeTransparency: number,
 	originalStripTransparency: number,
-	originalPosition: UDim2,
+	targetPosition: UDim2,
 }
 
 local activeEntries: { Entry } = {}
@@ -87,27 +92,39 @@ local function removeEntry(entry: Entry)
 
 	local tweenInfo = TweenInfo.new(FADE_OUT_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 	fade(entry, tweenInfo, 1, 1, 1)
-	local tween = TweenService:Create(
-		row,
-		tweenInfo,
-		{ Position = entry.originalPosition + UDim2.fromOffset(-SLIDE_OFFSET, 0) }
-	)
+	local offScreen = UDim2.new(1, row.AbsoluteSize.X + SLIDE_OUT_MARGIN, row.Position.Y.Scale, row.Position.Y.Offset)
+	local tween = TweenService:Create(row, tweenInfo, { Position = offScreen })
 	tween:Play()
 	tween.Completed:Once(function()
 		if row then row:Destroy() end
 	end)
 end
 
+-- Rows stack upward from the feed's bottom edge: the newest sits on the baseline,
+-- older rows are pushed up one slot each time a kill lands.
+local function slotPosition(feed: GuiObject, rowHeight: number, slotFromBottom: number): UDim2
+	local gap = feed.AbsoluteSize.Y * ROW_GAP
+	return UDim2.new(1, 0, 1, -slotFromBottom * (rowHeight + gap))
+end
+
+local function layoutEntries(feed: GuiObject)
+	local count = #activeEntries
+	for i, entry in activeEntries do
+		entry.targetPosition = slotPosition(feed, entry.row.AbsoluteSize.Y, count - i)
+		TweenService:Create(entry.row, SHIFT_TWEEN, { Position = entry.targetPosition }):Play()
+	end
+end
+
 local function animateIn(entry: Entry)
 	local row = entry.row
-	row.Position = entry.originalPosition + UDim2.fromOffset(SLIDE_OFFSET, 0)
+	row.Position = entry.targetPosition + UDim2.fromOffset(SLIDE_OFFSET, 0)
 	entry.label.TextTransparency = 1
 	if entry.stroke then entry.stroke.Transparency = 1 end
 	if entry.strip then entry.strip.BackgroundTransparency = 1 end
 
 	local tweenInfo = TweenInfo.new(FADE_IN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	fade(entry, tweenInfo, entry.originalTextTransparency, entry.originalStrokeTransparency, entry.originalStripTransparency)
-	TweenService:Create(row, tweenInfo, { Position = entry.originalPosition }):Play()
+	TweenService:Create(row, tweenInfo, { Position = entry.targetPosition }):Play()
 end
 
 local function addEntry(text: string)
@@ -129,6 +146,7 @@ local function addEntry(text: string)
 
 	label.RichText = true
 	label.Text = text
+	row.AnchorPoint = Vector2.new(1, 1)
 	row.Visible = true
 	row.Parent = feed
 
@@ -141,14 +159,15 @@ local function addEntry(text: string)
 		originalTextTransparency = label.TextTransparency,
 		originalStrokeTransparency = if stroke then stroke.Transparency else 0,
 		originalStripTransparency = if strip then (strip :: GuiObject).BackgroundTransparency else 1,
-		originalPosition = row.Position,
+		targetPosition = UDim2.new(),
 	}
-	table.insert(activeEntries, entry)
 
-	while #activeEntries > MAX_ENTRIES do
+	while #activeEntries >= MAX_ENTRIES do
 		removeEntry(activeEntries[1])
 	end
+	table.insert(activeEntries, entry)
 
+	layoutEntries(feed)
 	animateIn(entry)
 
 	task.delay(DISPLAY_TIME, function()
