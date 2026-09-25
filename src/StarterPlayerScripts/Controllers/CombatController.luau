@@ -41,67 +41,6 @@ local container: GuiObject?
 local shieldMeter: Meter = {}
 local gunMeter: Meter = {}
 
--- Each meter layer (BarBG, Fill, EmptyOverlay) is two halves named Left and
--- Right, each with a "Slant" UIGradient. The gradient cuts one corner off its
--- half (top-left of Left, bottom-right of Right) along a line at the authored
--- Rotation, so the halves together form a parallelogram. Roblox spans a rotated
--- gradient only across the chord through the object's center, so the cut is
--- recomputed from AbsoluteSize whenever the half resizes, and a half wider than
--- about 3.5x its height at 20 degrees puts the corner out of reach (no cut).
-local function applySlant(piece: GuiObject)
-	local gradient = piece:FindFirstChild("Slant")
-	if not gradient or not gradient:IsA("UIGradient") then return end
-	local cutsLeft = piece.Name == "Left"
-	local function update()
-		local w, h = piece.AbsoluteSize.X, piece.AbsoluteSize.Y
-		local angle = math.rad(gradient.Rotation)
-		local cos, sin = math.cos(angle), math.sin(angle)
-		if w <= 0 or h <= 0 or cos <= 0 or sin <= 0 then return end
-		local chord = math.min(w / cos, h / sin)
-		local corner = 0.5 - (w * cos - h * sin) / (2 * chord)
-		local keypoints
-		if cutsLeft then
-			if corner <= 0.001 then
-				keypoints = { NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0) }
-			elseif corner >= 0.999 then
-				keypoints = { NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 1) }
-			else
-				keypoints = {
-					NumberSequenceKeypoint.new(0, 1),
-					NumberSequenceKeypoint.new(corner - 0.001, 1),
-					NumberSequenceKeypoint.new(corner, 0),
-					NumberSequenceKeypoint.new(1, 0),
-				}
-			end
-		else
-			local cut = 1 - corner
-			if cut >= 0.999 then
-				keypoints = { NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0) }
-			elseif cut <= 0.001 then
-				keypoints = { NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 1) }
-			else
-				keypoints = {
-					NumberSequenceKeypoint.new(0, 0),
-					NumberSequenceKeypoint.new(cut, 0),
-					NumberSequenceKeypoint.new(cut + 0.001, 1),
-					NumberSequenceKeypoint.new(1, 1),
-				}
-			end
-		end
-		gradient.Transparency = NumberSequence.new(keypoints)
-	end
-	piece:GetPropertyChangedSignal("AbsoluteSize"):Connect(update)
-	update()
-end
-
-local function slantHalves(layer: Instance)
-	for _, child in layer:GetChildren() do
-		if child:IsA("GuiObject") and (child.Name == "Left" or child.Name == "Right") then
-			applySlant(child)
-		end
-	end
-end
-
 local function resolveMeter(meter: Meter, name: string)
 	meter.fill = nil
 	meter.overlay = nil
@@ -114,16 +53,13 @@ local function resolveMeter(meter: Meter, name: string)
 	local barBg = frame:FindFirstChild("BarBG")
 	if not barBg then return end
 
-	slantHalves(barBg)
 	local fill = barBg:FindFirstChild("Fill")
 	if fill and fill:IsA("GuiObject") then
 		meter.fill = fill
-		slantHalves(fill)
 	end
 	local overlay = barBg:FindFirstChild("EmptyOverlay")
 	if overlay and overlay:IsA("GuiObject") then
 		meter.overlay = overlay
-		slantHalves(overlay)
 	end
 end
 
