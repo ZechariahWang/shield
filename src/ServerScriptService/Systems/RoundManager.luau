@@ -214,6 +214,7 @@ local function endRound(reason: string, winners: { string })
 		MapManager.teleportToLobby(player)
 	end
 
+	BotSystem.despawn()
 	MapManager.unloadMap()
 
 	task.wait(Constants.END_TIME)

@@ -233,6 +233,8 @@ function BotSystem.start()
 	end
 end
 
+-- Stops the loops but leaves the models standing so a victim's kill cam can
+-- keep tracking its bot through the arena freeze; despawn() removes them.
 function BotSystem.stop()
 	running = false
 	generation += 1
@@ -240,6 +242,9 @@ function BotSystem.stop()
 		CombatSystem.unregisterBot(char)
 	end
 	table.clear(bots)
+end
+
+function BotSystem.despawn()
 	local folder = Workspace:FindFirstChild(BOTS_FOLDER_NAME)
 	if folder then
 		folder:Destroy()
