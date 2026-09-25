@@ -88,7 +88,7 @@ local function applyAbility(ability: Abilities.AbilityDef)
 		iconLabel.ImageColor3 = ability.iconColor
 	end
 	if titleLabel then
-		titleLabel.Text = ability.displayName
+		titleLabel.Text = ability.displayName:upper()
 	end
 end
 
