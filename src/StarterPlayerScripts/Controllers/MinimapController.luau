@@ -7,45 +7,42 @@ local Constants = require(ReplicatedStorage.Shared.Constants)
 
 local MinimapController = {}
 
-type Bounds = { centerX: number, centerZ: number, longest: number }
-
 local localPlayer = Players.LocalPlayer
 local frame: Frame
 local currentPhase = Constants.PHASE_LOBBY
-local bounds: Bounds? = nil
 
 local dots: { [Model]: Frame } = {}
 local shotFlashUntil: { [Model]: number } = {}
 local shotConnections: { [Model]: RBXScriptConnection } = {}
 
--- ponytail: axis-aligned part extents, so a rotated part can pad the bounds a little.
-local function computeBounds(): Bounds?
-	local map = Workspace:FindFirstChild("LoadedMap")
-	if not map then return nil end
-	local minX, minZ = math.huge, math.huge
-	local maxX, maxZ = -math.huge, -math.huge
-	for _, part in map:GetDescendants() do
-		if not part:IsA("BasePart") then continue end
-		local half = part.Size / 2
-		local pos = part.Position
-		minX = math.min(minX, pos.X - half.X)
-		maxX = math.max(maxX, pos.X + half.X)
-		minZ = math.min(minZ, pos.Z - half.Z)
-		maxZ = math.max(maxZ, pos.Z + half.Z)
-	end
-	if minX == math.huge then return nil end
-	return {
-		centerX = (minX + maxX) / 2,
-		centerZ = (minZ + maxZ) / 2,
-		longest = math.max(maxX - minX, maxZ - minZ, 1),
-	}
+local function localRoot(): BasePart?
+	local char = localPlayer.Character
+	if not char then return nil end
+	return char:FindFirstChild("HumanoidRootPart") :: BasePart?
 end
 
--- Top-down, north (-Z) up, the longer arena side fitted to the square.
-local function project(position: Vector3): (number, number)
-	local b = bounds :: Bounds
-	local u = 0.5 + (position.X - b.centerX) / b.longest
-	local v = 0.5 - (position.Z - b.centerZ) / b.longest
+-- Where the player is looking, flattened to the ground plane. The camera leads
+-- the character under shift lock, so it is the direction that feels like "up".
+local function facing(root: BasePart): Vector3
+	local camera = Workspace.CurrentCamera
+	local look = if camera then camera.CFrame.LookVector else root.CFrame.LookVector
+	local flat = Vector3.new(look.X, 0, look.Z)
+	if flat.Magnitude < 0.001 then
+		flat = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z)
+	end
+	if flat.Magnitude < 0.001 then
+		return -Vector3.zAxis
+	end
+	return flat.Unit
+end
+
+-- Top-down, the local player at the center and their facing direction up;
+-- MINIMAP_RANGE studs reach the edge.
+local function project(position: Vector3, center: Vector3, forward: Vector3): (number, number)
+	local offset = position - center
+	local right = forward:Cross(Vector3.yAxis)
+	local u = 0.5 + offset:Dot(right) / (2 * Constants.MINIMAP_RANGE)
+	local v = 0.5 - offset:Dot(forward) / (2 * Constants.MINIMAP_RANGE)
 	return u, v
 end
 
@@ -113,7 +110,13 @@ local function clearDots()
 end
 
 local function update()
-	if not frame.Visible or not bounds then return end
+	if not frame.Visible then return end
+	local center = localRoot()
+	if not center then
+		clearDots()
+		return
+	end
+	local forward = facing(center)
 	local now = os.clock()
 	local present: { [Model]: boolean } = {}
 	for _, char in collectCombatants() do
@@ -124,7 +127,7 @@ local function update()
 			dot.Visible = false
 			continue
 		end
-		local u, v = project(root.Position)
+		local u, v = project(root.Position, center.Position, forward)
 		local inside = u >= 0 and u <= 1 and v >= 0 and v <= 1
 		dot.Visible = inside
 		dot.Position = UDim2.fromScale(u, v)
@@ -139,10 +142,6 @@ end
 
 local function reconcileVisibility()
 	local show = currentPhase == Constants.PHASE_REVEAL or currentPhase == Constants.PHASE_ROUND
-	if show then
-		bounds = computeBounds()
-		show = bounds ~= nil
-	end
 	frame.Visible = show
 	if not show then
 		clearDots()

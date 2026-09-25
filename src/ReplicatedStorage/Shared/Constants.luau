@@ -110,6 +110,7 @@ Constants.WHITE = Color3.fromRGB(255, 255, 255)       -- #FFFFFF
 
 -- MINIMAP (the Game.Minimap frame authored in Studio; Round phase only)
 Constants.MINIMAP_DOT_SIZE = 6                        -- px
+Constants.MINIMAP_RANGE = 60                          -- studs from the local player to the minimap's edge
 Constants.MINIMAP_SHOT_FLASH = 0.35                   -- seconds a dot stays yellow after that combatant fires
 Constants.MINIMAP_ENEMY_COLOR = Constants.TAGGER_COLOR
 Constants.MINIMAP_SHIELD_COLOR = Constants.SHIELD_COLOR
