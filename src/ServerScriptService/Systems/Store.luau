@@ -1,3 +1,4 @@
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -128,6 +129,37 @@ local function purchase(player: Player, kind: any, name: any)
 	sendState(player)
 end
 
+-- Coin packs are developer products authored as ReplicatedStorage.Robux children
+-- with ProductId and Coins attributes. ponytail: no receipt log; coins are session
+-- only anyway, so a re-delivered receipt after a crash just grants again.
+local function coinPack(productId: number): number?
+	local folder = ReplicatedStorage:FindFirstChild("Robux")
+	if not folder then return nil end
+	for _, item in folder:GetChildren() do
+		if item:GetAttribute("ProductId") == productId then
+			local amount = item:GetAttribute("Coins")
+			if typeof(amount) == "number" then
+				return amount
+			end
+		end
+	end
+	return nil
+end
+
+local function processReceipt(receipt: { PlayerId: number, ProductId: number }): Enum.ProductPurchaseDecision
+	local player = Players:GetPlayerByUserId(receipt.PlayerId)
+	if not player or not wallets[player] then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local amount = coinPack(receipt.ProductId)
+	if not amount then
+		warn("Store: no coin pack for product " .. receipt.ProductId)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	Store.addCoins(player, amount)
+	return Enum.ProductPurchaseDecision.PurchaseGranted
+end
+
 local function equip(player: Player, name: any)
 	local wallet = wallets[player]
 	if not wallet or typeof(name) ~= "string" then return end
@@ -144,6 +176,7 @@ function Store.init()
 
 	purchaseRemote.OnServerEvent:Connect(purchase)
 	equipRemote.OnServerEvent:Connect(equip)
+	MarketplaceService.ProcessReceipt = processReceipt
 	-- The join-time state can beat the client's controller; the client asks again once it's listening.
 	ShopStateRemote.OnServerEvent:Connect(sendState)
 
