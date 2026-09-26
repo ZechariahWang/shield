@@ -15,7 +15,9 @@
     "StarterPlayer": {
       "$ignoreUnknownInstances": true,
       "$properties": {
-        "DevCameraOcclusionMode": "Zoom"
+        "DevCameraOcclusionMode": "Zoom",
+        "CameraMinZoomDistance": 12.5,
+        "CameraMaxZoomDistance": 12.5
       },
       "StarterPlayerScripts": {
         "$path": "src/StarterPlayerScripts"
