@@ -19,7 +19,7 @@ local currentPhase: string = Constants.PHASE_LOBBY
 local shieldStatus: string = Constants.SHIELD_READY
 local lastShotAt = -math.huge
 
--- Public: the crosshair punch in CombatFeedbackController listens here.
+-- Public: fires (aimPoint) on every shot sent; CombatFeedbackController punches the crosshair and draws the tracer.
 local shotFiredEvent = Instance.new("BindableEvent")
 CombatController.ShotFired = shotFiredEvent.Event
 
@@ -135,7 +135,9 @@ local function reconcileMeterVisibility()
 	container.Visible = visible
 end
 
-local function getAimDirection(headPosition: Vector3): Vector3?
+-- Direction from the head to what the crosshair is over, plus the aim point and the part
+-- under it (nil on a miss). The part and point go to the server as the hit claim.
+local function getAim(headPosition: Vector3): (Vector3?, Vector3?, BasePart?)
 	local camera = Workspace.CurrentCamera
 	if not camera then return nil end
 
@@ -149,13 +151,15 @@ local function getAimDirection(headPosition: Vector3): Vector3?
 
 	local result = Workspace:Raycast(ray.Origin, ray.Direction * Constants.PISTOL_RANGE, params)
 	local aimPoint = ray.Origin + ray.Direction * Constants.PISTOL_RANGE
+	local hitPart: BasePart? = nil
 	if result then
 		aimPoint = result.Position
+		hitPart = result.Instance
 	end
 
 	local offset = aimPoint - headPosition
 	if offset.Magnitude < 0.001 then return nil end
-	return offset.Unit
+	return offset.Unit, aimPoint, hitPart
 end
 
 local function tryShoot()
@@ -171,12 +175,12 @@ local function tryShoot()
 	local head = character:FindFirstChild("Head") :: BasePart?
 	if not head then return end
 
-	local direction = getAimDirection(head.Position)
-	if not direction then return end
+	local direction, aimPoint, hitPart = getAim(head.Position)
+	if not direction or not aimPoint then return end
 
 	lastShotAt = now
-	ShootRequestRemote:FireServer(head.Position, direction)
-	shotFiredEvent:Fire()
+	ShootRequestRemote:FireServer(head.Position, direction, aimPoint, hitPart)
+	shotFiredEvent:Fire(aimPoint)
 	setMeter(gunMeter, 0, 1, Constants.PISTOL_COOLDOWN, true)
 end
 

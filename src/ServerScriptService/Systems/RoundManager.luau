@@ -366,6 +366,7 @@ local function onCharacterAdded(player: Player, char: Model)
 	if hum then
 		hum.BreakJointsOnDeath = false
 	end
+	CombatSystem.prepareHitbox(char)
 
 	syncPhaseTo(player)
 	PlayerState.syncTo(player)

@@ -399,6 +399,110 @@ local function onShotBlocked(_other: Player?)
 	playSound(SOUND_IDS.shotBlocked, 0.8)
 end
 
+-- Tracers: a short neon segment flies from the muzzle to the end point, then sparks.
+type Tracer = { part: Part, from: Vector3, to: Vector3, travelled: number }
+local tracers: { Tracer } = {}
+
+local function muzzlePosition(char: Model): Vector3?
+	local weapon = char:FindFirstChild("EquippedWeapon")
+	if weapon and weapon:IsA("Model") then
+		local muzzle = weapon:FindFirstChild("Muzzle", true)
+		if muzzle and muzzle:IsA("Attachment") then return muzzle.WorldPosition end
+		if muzzle and muzzle:IsA("BasePart") then return muzzle.Position end
+		if weapon.PrimaryPart then return weapon.PrimaryPart.Position end
+	end
+	local head = char:FindFirstChild("Head")
+	if head and head:IsA("BasePart") then return head.Position end
+	return nil
+end
+
+local function spawnImpact(position: Vector3)
+	local holder = Instance.new("Part")
+	holder.Name = "PistolImpact"
+	holder.Size = Vector3.new(0.2, 0.2, 0.2)
+	holder.Position = position
+	holder.Anchored = true
+	holder.CanCollide = false
+	holder.CanQuery = false
+	holder.CanTouch = false
+	holder.Transparency = 1
+
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Color = ColorSequence.new(Constants.PISTOL_TRACER_COLOR)
+	emitter.LightEmission = 1
+	emitter.Size = NumberSequence.new(0.15, 0)
+	emitter.Lifetime = NumberRange.new(0.1, Constants.PISTOL_IMPACT_FX_TIME)
+	emitter.Speed = NumberRange.new(6, 14)
+	emitter.SpreadAngle = Vector2.new(180, 180)
+	emitter.Acceleration = Vector3.new(0, -40, 0)
+	emitter.Rate = 0
+	emitter.Parent = holder
+
+	holder.Parent = Workspace
+	emitter:Emit(Constants.PISTOL_IMPACT_PARTICLES)
+	task.delay(Constants.PISTOL_IMPACT_FX_TIME + 0.1, function()
+		holder:Destroy()
+	end)
+end
+
+local function spawnTracer(char: Model, endPoint: Vector3)
+	local from = muzzlePosition(char)
+	if not from then return end
+	if (endPoint - from).Magnitude < 0.5 then
+		spawnImpact(endPoint)
+		return
+	end
+
+	local part = Instance.new("Part")
+	part.Name = "PistolTracer"
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.Material = Enum.Material.Neon
+	part.Color = Constants.PISTOL_TRACER_COLOR
+	part.Size = Vector3.new(Constants.PISTOL_TRACER_THICKNESS, Constants.PISTOL_TRACER_THICKNESS, 0.01)
+	part.CFrame = CFrame.lookAt(from, endPoint)
+	part.Parent = Workspace
+	table.insert(tracers, { part = part, from = from, to = endPoint, travelled = 0 })
+end
+
+local function tracerStep(dt: number)
+	for i = #tracers, 1, -1 do
+		local t = tracers[i]
+		local total = (t.to - t.from).Magnitude
+		t.travelled += Constants.PISTOL_TRACER_SPEED * dt
+		local headDist = math.min(t.travelled, total)
+		local tailDist = math.max(t.travelled - Constants.PISTOL_TRACER_LENGTH, 0)
+		if tailDist >= total then
+			t.part:Destroy()
+			table.remove(tracers, i)
+			spawnImpact(t.to)
+			continue
+		end
+		local dir = (t.to - t.from).Unit
+		local headPos = t.from + dir * headDist
+		local tailPos = t.from + dir * tailDist
+		local length = headDist - tailDist
+		t.part.Size = Vector3.new(Constants.PISTOL_TRACER_THICKNESS, Constants.PISTOL_TRACER_THICKNESS, length)
+		t.part.CFrame = CFrame.lookAt((headPos + tailPos) * 0.5, headPos)
+	end
+end
+
+local function onLocalShot(aimPoint: Vector3)
+	punchCrosshair()
+	local char = localPlayer.Character
+	if char then
+		spawnTracer(char, aimPoint)
+	end
+end
+
+local function onShotTracer(shooter: Model, endPoint: Vector3)
+	if typeof(shooter) ~= "Instance" or not shooter:IsA("Model") then return end
+	spawnTracer(shooter, endPoint)
+end
+
 local function onCharacterAdded(char: Model)
 	lastKnownHP = math.huge
 	shakeIntensity = 0
@@ -424,6 +528,7 @@ function CombatFeedbackController.init()
 	local DamageTakenRemote = Remotes:WaitForChild("DamageTaken") :: RemoteEvent
 	local KillFeedRemote = Remotes:WaitForChild("KillFeed") :: RemoteEvent
 	local ShotBlockedRemote = Remotes:WaitForChild("ShotBlocked") :: RemoteEvent
+	local ShotTracerRemote = Remotes:WaitForChild("ShotTracer") :: RemoteEvent
 	local PlayerStateRemote = Remotes:WaitForChild("PlayerStateChanged") :: RemoteEvent
 	local RoundStateRemote = Remotes:WaitForChild("RoundStateChanged") :: RemoteEvent
 
@@ -431,6 +536,7 @@ function CombatFeedbackController.init()
 	DamageTakenRemote.OnClientEvent:Connect(onDamageTaken)
 	KillFeedRemote.OnClientEvent:Connect(onKillFeed)
 	ShotBlockedRemote.OnClientEvent:Connect(onShotBlocked)
+	ShotTracerRemote.OnClientEvent:Connect(onShotTracer)
 
 	PlayerStateRemote.OnClientEvent:Connect(function(player: Player, state: string)
 		if player ~= localPlayer then return end
@@ -443,7 +549,7 @@ function CombatFeedbackController.init()
 		reconcileCombatMode()
 	end)
 
-	CombatController.ShotFired:Connect(punchCrosshair)
+	CombatController.ShotFired:Connect(onLocalShot)
 
 	localPlayer.CharacterAdded:Connect(onCharacterAdded)
 	if localPlayer.Character then
@@ -457,6 +563,7 @@ function CombatFeedbackController.init()
 		shakeStep(dt)
 		sizzleStep(dt)
 		damageNumberStep(dt)
+		tracerStep(dt)
 	end)
 end
 

@@ -38,6 +38,7 @@ local ShieldChangedRemote: RemoteEvent
 local ShotBlockedRemote: RemoteEvent
 local DamageDealtRemote: RemoteEvent
 local DamageTakenRemote: RemoteEvent
+local ShotTracerRemote: RemoteEvent
 
 local function ensureRemote(parent: Instance, name: string): RemoteEvent
 	local existing = parent:FindFirstChild(name)
@@ -323,24 +324,30 @@ local function clearShieldSilently(char: Model)
 	shields[char] = newShieldState()
 end
 
-local function spawnTracer(origin: Vector3, endPoint: Vector3)
-	local delta = endPoint - origin
-	local length = delta.Magnitude
-	if length < 0.01 then return end
+-- Everyone but the shooter draws the tracer from this; the shooter drew their own on input.
+local function broadcastTracer(shooter: Model, endPoint: Vector3)
+	if not ShotTracerRemote then return end
+	local shooterPlayer = playerOf(shooter)
+	for _, player in Players:GetPlayers() do
+		if player ~= shooterPlayer then
+			ShotTracerRemote:FireClient(player, shooter, endPoint)
+		end
+	end
+end
 
-	local tracer = Instance.new("Part")
-	tracer.Name = "PistolTracer"
-	tracer.Size = Vector3.new(0.1, 0.1, length)
-	tracer.CFrame = CFrame.lookAt(origin + delta * 0.5, endPoint)
-	tracer.Anchored = true
-	tracer.CanCollide = false
-	tracer.CanQuery = false
-	tracer.CanTouch = false
-	tracer.Material = Enum.Material.Neon
-	tracer.Color = Color3.fromRGB(255, 240, 160)
-	tracer.Parent = Workspace
-
-	Debris:AddItem(tracer, Constants.PISTOL_TRACER_LIFETIME)
+-- Hats, hair and the welded weapon would otherwise count as body: only body parts
+-- and the shield bubble stay queryable, on the server and (replicated) on every client.
+local function prepareHitbox(char: Model)
+	local function disable(inst: Instance)
+		if not inst:IsA("BasePart") then return end
+		if inst:FindFirstAncestorOfClass("Accessory") then
+			inst.CanQuery = false
+		end
+	end
+	for _, d in char:GetDescendants() do
+		disable(d)
+	end
+	char.DescendantAdded:Connect(disable)
 end
 
 local function isFiniteVector(v: Vector3): boolean
@@ -377,7 +384,31 @@ local function eliminate(victim: Model, killer: Model?)
 	eliminated:Fire(victim, killer)
 end
 
-local function shoot(shooter: Model, origin: any, direction: any)
+-- A client-claimed hit stands when the claimed part belongs to a live combatant, the claimed
+-- point is near that part's server position, and nothing blocks the line from origin to it.
+-- The shooter's own view of the shot decides, so lag and camera parallax don't eat hits.
+local function validateClaim(shooter: Model, origin: Vector3, hitPart: any, hitPosition: any): Model?
+	if typeof(hitPart) ~= "Instance" or not hitPart:IsA("BasePart") then return nil end
+	if typeof(hitPosition) ~= "Vector3" or not isFiniteVector(hitPosition) then return nil end
+	if (hitPosition - origin).Magnitude > Constants.PISTOL_RANGE then return nil end
+
+	local victim = combatantFromHit(hitPart)
+	if not victim or victim == shooter then return nil end
+	if not hitPart:IsDescendantOf(victim) then return nil end
+
+	local slack = hitPart.Size.Magnitude * 0.5 + Constants.PISTOL_HIT_TOLERANCE
+	if (hitPosition - hitPart.Position).Magnitude > slack then return nil end
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { shooter, victim }
+	local blocked = Workspace:Raycast(origin, hitPosition - origin, params)
+	if blocked then return nil end
+
+	return victim
+end
+
+local function shoot(shooter: Model, origin: any, direction: any, hitPart: any, hitPosition: any)
 	if not active then return end
 	if not isCombatant(shooter) then return end
 	if eliminatedChars[shooter] then return end
@@ -400,20 +431,26 @@ local function shoot(shooter: Model, origin: any, direction: any)
 	s.lastShotAt = now
 
 	local aim = direction.Unit
-	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Exclude
-	params.FilterDescendantsInstances = { shooter }
+	local victim = validateClaim(shooter, origin, hitPart, hitPosition)
+	local endPoint: Vector3
+	if victim then
+		endPoint = hitPosition
+	else
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = { shooter }
+		local result = Workspace:Raycast(origin, aim * Constants.PISTOL_RANGE, params)
+		endPoint = if result then result.Position else origin + aim * Constants.PISTOL_RANGE
+		if result then
+			victim = combatantFromHit(result.Instance)
+		end
+	end
 
-	local result = Workspace:Raycast(origin, aim * Constants.PISTOL_RANGE, params)
-	local endPoint = if result then result.Position else origin + aim * Constants.PISTOL_RANGE
-	spawnTracer(origin, endPoint)
+	broadcastTracer(shooter, endPoint)
 	playSoundAt(head, Constants.PISTOL_SHOT_SOUND)
 	-- Replicated shot counter; the client minimap flashes the shooter on every change.
 	shooter:SetAttribute("Shots", (shooter:GetAttribute("Shots") or 0) + 1)
 
-	if not result then return end
-
-	local victim = combatantFromHit(result.Instance)
 	if not victim or victim == shooter then return end
 	if not isCombatant(victim) then return end
 	if eliminatedChars[victim] then return end
@@ -472,7 +509,11 @@ end
 
 -- Public entry points for server-driven combatants (bots). Same rules as the remotes.
 function CombatSystem.shoot(shooter: Model, origin: Vector3, direction: Vector3)
-	shoot(shooter, origin, direction)
+	shoot(shooter, origin, direction, nil, nil)
+end
+
+function CombatSystem.prepareHitbox(char: Model)
+	prepareHitbox(char)
 end
 
 function CombatSystem.raiseShield(char: Model)
@@ -481,6 +522,7 @@ end
 
 function CombatSystem.registerBot(char: Model)
 	bots[char] = true
+	prepareHitbox(char)
 	shields[char] = newShieldState()
 end
 
@@ -529,11 +571,12 @@ function CombatSystem.init()
 	ShotBlockedRemote = ensureRemote(Remotes, "ShotBlocked")
 	DamageDealtRemote = ensureRemote(Remotes, "DamageDealt")
 	DamageTakenRemote = ensureRemote(Remotes, "DamageTaken")
+	ShotTracerRemote = ensureRemote(Remotes, "ShotTracer")
 
-	ShootRequestRemote.OnServerEvent:Connect(function(player, origin, direction)
+	ShootRequestRemote.OnServerEvent:Connect(function(player, origin, direction, hitPosition, hitPart)
 		local char = player.Character
 		if not char then return end
-		shoot(char, origin, direction)
+		shoot(char, origin, direction, hitPart, hitPosition)
 	end)
 
 	ShieldRequestRemote.OnServerEvent:Connect(function(player, raise)

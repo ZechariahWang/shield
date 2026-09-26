@@ -28,7 +28,13 @@ Constants.PISTOL_COOLDOWN_TOLERANCE = 0.05 -- server slack for network jitter: t
 Constants.PISTOL_RANGE = 200              -- studs
 Constants.PISTOL_DAMAGE = 100             -- one shot eliminates
 Constants.PISTOL_ORIGIN_TOLERANCE = 8     -- studs; max distance between client-reported origin and the head
-Constants.PISTOL_TRACER_LIFETIME = 0.08   -- seconds the tracer part stays in Workspace
+Constants.PISTOL_HIT_TOLERANCE = 5        -- studs past the hit part's half-diagonal a client-claimed hit point may sit from the part's server position
+Constants.PISTOL_TRACER_SPEED = 600       -- studs per second the tracer segment travels
+Constants.PISTOL_TRACER_LENGTH = 6        -- studs
+Constants.PISTOL_TRACER_THICKNESS = 0.08  -- studs
+Constants.PISTOL_TRACER_COLOR = Color3.fromRGB(255, 240, 160)
+Constants.PISTOL_IMPACT_PARTICLES = 10    -- spark burst count where a tracer ends
+Constants.PISTOL_IMPACT_FX_TIME = 0.4     -- seconds the impact emitter lives
 Constants.PISTOL_SHOT_SOUND = "rbxassetid://127604219525464"  -- played at the shooter's head, server side
 Constants.SOUND_CLEANUP_TIME = 3          -- seconds before a one-shot Sound instance is removed
 
