@@ -3,6 +3,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
+local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local PlayerState = require(script.Parent.PlayerState)
 local CombatSystem = require(script.Parent.CombatSystem)
 local AbilitySystem = require(script.Parent.AbilitySystem)
@@ -45,10 +46,11 @@ end
 
 -- Read the grip CFrame and motor name from the third-person rig's Right-Arm motor.
 -- This lets the user author the grip in Studio (via the rig's pre-rigged weapon)
--- and have it pick up automatically. Without a rig, falls back to
--- Constants.WEAPON_GRIPS[weaponName] (identity if absent) + "Weapon".
+-- and have it pick up automatically. Without a rig, falls back to the item
+-- module's `grip` (identity if absent) + "Weapon".
 local function extractTPGrip(weaponName: string): (CFrame, string)
-	local fallbackGrip = Constants.WEAPON_GRIPS[weaponName] or CFrame.new()
+	local data = Catalog.get(Catalog.KIND_WEAPONS, weaponName)
+	local fallbackGrip = (data and data.grip) or CFrame.new()
 	local rigsFolder = ReplicatedStorage:FindFirstChild("ThirdPersonRigs")
 	if not rigsFolder then return fallbackGrip, "Weapon" end
 	local rig = rigsFolder:FindFirstChild(weaponName)
@@ -85,11 +87,9 @@ local function applyTPWeapon(player: Player, on: boolean)
 	if not on then return end
 	if not rightArm then return end
 
-	local weaponName = Store.equipped(player)
-	local weaponsFolder = ReplicatedStorage:FindFirstChild("Weapons")
-	if not weaponsFolder then return end
-	local template = weaponsFolder:FindFirstChild(weaponName)
-	if not template or not template:IsA("Model") then return end
+	local weaponName = Store.equipped(player, Catalog.KIND_WEAPONS) or Constants.VIEWMODEL_DEFAULT_WEAPON
+	local template = Catalog.model(Catalog.KIND_WEAPONS, weaponName)
+	if not template then return end
 
 	local clone = template:Clone()
 	clone.Name = "EquippedWeapon"

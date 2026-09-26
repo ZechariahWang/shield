@@ -82,21 +82,16 @@ Constants.KILL_CAM_HEIGHT = 2
 Constants.KILL_CAM_TWEEN_TIME = 0.6
 
 -- THIRD-PERSON WEAPON (welded to every player by RoundManager)
-Constants.VIEWMODEL_DEFAULT_WEAPON = "Pistol"
--- Grip CFrame (Right Arm space -> weapon primary part) for weapons without a
--- ThirdPersonRigs entry. The Pistol's Frame points +X toward the barrel and +Y
--- up; this maps that to the arm's -Y (forward when raised) and -Z, with the
--- magazine sitting in the hand.
-Constants.WEAPON_GRIPS = {
-	Pistol = CFrame.new(0, -0.99, 0.09, 0, 0, 1, -1, 0, 0, 0, -1, 0),
-}
+Constants.VIEWMODEL_DEFAULT_WEAPON = "Pistol"  -- fallback when a save names a weapon the catalog no longer has
 
--- SHOP (weapon skins bought with coins; per-ability tunables live in Shared/Abilities.luau)
+-- SHOP (items are the modules under ReplicatedStorage.Items; prices, stats and per-ability tunables live there)
 Constants.SHOP_STARTING_COINS = 0
 Constants.SHOP_COINS_PER_KILL = 25
 Constants.SHOP_COINS_PER_WIN = 100
-Constants.SHOP_DEFAULT_PRICE = 200   -- used when a weapon model or ability folder has no Price attribute
-Constants.SHOP_DEFAULT_ABILITY = "Dash"  -- owned by everyone; the only ability with behavior
+Constants.STORE_DATASTORE_NAME = "PlayerData"
+Constants.STORE_LOAD_RETRIES = 3
+Constants.STORE_RETRY_DELAY = 1         -- seconds between failed load attempts
+Constants.STORE_AUTOSAVE_INTERVAL = 120 -- seconds between background saves of changed wallets
 
 -- PLAYER STATES
 Constants.STATE_LOBBY = "Lobby"     -- also used for eliminated players (spectating from the lobby)
