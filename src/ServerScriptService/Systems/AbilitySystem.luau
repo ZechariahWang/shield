@@ -3,9 +3,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local Abilities = require(ReplicatedStorage.Shared.Abilities)
+local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local PlayerState = require(script.Parent.PlayerState)
+local Store = require(script.Parent.Store)
 
 local AbilitySystem = {}
+
+AbilitySystem.DASH = "Dash"
 
 local active = false
 local lastDash: { [Player]: number } = {}
@@ -16,8 +20,12 @@ local function dash(player: Player)
 	if PlayerState.get(player) ~= Constants.STATE_SAFE then
 		return
 	end
+	-- Only Dash has behavior; any other equipped ability is inert.
+	if Store.equipped(player, Catalog.KIND_ABILITIES) ~= AbilitySystem.DASH then
+		return
+	end
 
-	local params = Abilities.params("Dash")
+	local params = Abilities.params(AbilitySystem.DASH)
 	local now = os.clock()
 	if now - (lastDash[player] or 0) < params.cooldown then
 		return
