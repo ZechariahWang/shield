@@ -233,7 +233,7 @@ function CombatController.init()
 		if gameProcessed then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			tryShoot()
-		elseif input.KeyCode == Enum.KeyCode.E then
+		elseif input.KeyCode == Enum.KeyCode.Q then
 			tryToggleShield()
 		end
 	end)

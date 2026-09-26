@@ -53,7 +53,7 @@ function DashController.init()
 
 	UserInputService.InputBegan:Connect(function(input, gpe)
 		if gpe then return end
-		if input.KeyCode == Enum.KeyCode.Q then
+		if input.KeyCode == Enum.KeyCode.E then
 			tryDash()
 		end
 	end)
