@@ -74,6 +74,8 @@ Constants.MOVEMENT_STEP_HEIGHT = 0.55         -- peak vertical arc of a swinging
 Constants.MOVEMENT_STEP_TIME = 0.18           -- seconds per swing
 Constants.MOVEMENT_TURN_RATE = 14             -- exp-decay rate of HRP yaw toward camera yaw
 Constants.MOVEMENT_GROUND_RAYCAST_DEPTH = 6   -- max stud distance below the ideal foot pos to look for ground
+Constants.LEAN_MAX_ANGLE = 8                  -- degrees the torso tips toward the movement direction at full input
+Constants.LEAN_RATE = 10                      -- exp-decay rate of the lean toward its target (server Heartbeat)
 
 -- KILL CAM (victim's camera swings to face the killer after elimination)
 Constants.KILL_CAM_TIME = 3
