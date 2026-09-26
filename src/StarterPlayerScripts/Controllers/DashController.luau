@@ -8,6 +8,8 @@ local AbilityHUDController = require(script.Parent.AbilityHUDController)
 
 local DashController = {}
 
+local DASH = "Dash"
+
 local localPlayer = Players.LocalPlayer
 local DashRequestRemote: RemoteEvent
 local PlayerStateRemote: RemoteEvent
@@ -24,11 +26,13 @@ end
 
 local function tryDash()
 	if not canDash() then return end
+	-- Only Dash has behavior; the key does nothing with another ability equipped.
+	if AbilityHUDController.equippedAbility() ~= DASH then return end
 	local now = os.clock()
-	if now - lastDash < Abilities.params("Dash").cooldown then return end
+	if now - lastDash < Abilities.params(DASH).cooldown then return end
 	lastDash = now
 	DashRequestRemote:FireServer()
-	AbilityHUDController.triggerCooldown("Dash")
+	AbilityHUDController.triggerCooldown(DASH)
 end
 
 function DashController.init()

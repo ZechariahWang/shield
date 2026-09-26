@@ -4,6 +4,7 @@ local TweenService = game:GetService("TweenService")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local Abilities = require(ReplicatedStorage.Shared.Abilities)
+local Catalog = require(ReplicatedStorage.Shared.Catalog)
 
 local AbilityHUDController = {}
 
@@ -14,6 +15,7 @@ local RoundStateRemote: RemoteEvent
 local localState: string = Constants.STATE_LOBBY
 local currentPhase: string = Constants.PHASE_LOBBY
 local activeAbilityId: string? = nil
+local equippedAbilityId: string? = nil
 
 local cooldownGen = 0
 local activeTween: Tween? = nil
@@ -160,25 +162,17 @@ local function isInGame(): boolean
 	return localState == Constants.STATE_SAFE
 end
 
-local function resolveAbilityForRole(): Abilities.AbilityDef?
-	local category = Abilities.categoryForState(localState)
-	if not category then return nil end
-	return Abilities.primaryFor(category)
+-- The ability equipped in the inventory, from the latest ShopState.
+function AbilityHUDController.equippedAbility(): string?
+	return equippedAbilityId
 end
 
 local function reconcileVisibility()
-	if not isInGame() then
+	if not isInGame() or not equippedAbilityId then
 		AbilityHUDController.setActiveAbility(nil)
 		return
 	end
-
-	local ability = resolveAbilityForRole()
-	if not ability then
-		AbilityHUDController.setActiveAbility(nil)
-		return
-	end
-
-	AbilityHUDController.setActiveAbility(ability.id)
+	AbilityHUDController.setActiveAbility(equippedAbilityId)
 end
 
 function AbilityHUDController.init()
@@ -193,6 +187,12 @@ function AbilityHUDController.init()
 	local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 	PlayerStateRemote = Remotes:WaitForChild("PlayerStateChanged") :: RemoteEvent
 	RoundStateRemote = Remotes:WaitForChild("RoundStateChanged") :: RemoteEvent
+	local ShopStateRemote = Remotes:WaitForChild("ShopState") :: RemoteEvent
+
+	ShopStateRemote.OnClientEvent:Connect(function(state: { equipped: { [string]: string } })
+		equippedAbilityId = state.equipped[Catalog.KIND_ABILITIES]
+		reconcileVisibility()
+	end)
 
 	PlayerStateRemote.OnClientEvent:Connect(function(player: Player, state: string)
 		if player ~= localPlayer then return end

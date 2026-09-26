@@ -1,9 +1,11 @@
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
-local Abilities = require(ReplicatedStorage.Shared.Abilities)
+local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local Constants = require(ReplicatedStorage.Shared.Constants)
 
 local ShopController = {}
@@ -29,37 +31,40 @@ local MODAL_OPEN_TWEEN = TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingD
 local MODAL_CLOSE_TWEEN = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 local TAB_TWEEN = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
+-- Equipped tag built into each card's Inset and the details preview
+local TAG_SIZE = UDim2.fromScale(0.48, 0.14)
+local TAG_TEXT = "EQUIPPED"
+
 -- Weapon preview camera
 local PREVIEW_FOV = 40
 local PREVIEW_DISTANCE = 1.15 -- multiples of the model's bounding-box diagonal
 local PREVIEW_TILT = 0.35     -- 0 = pure side profile, higher = more three-quarter view
+local PREVIEW_SPIN_SPEED = 30       -- degrees per second the details preview turns on its own
+local PREVIEW_DRAG_SENSITIVITY = 0.5 -- degrees per pixel dragged across the details preview
 
-local KIND_WEAPON = "Weapon"
-local KIND_ABILITY = "Ability"
-local KIND_ROBUX = "Robux"
-local KINDS = { KIND_WEAPON, KIND_ABILITY, KIND_ROBUX }
-local TAB_NAMES = { [KIND_WEAPON] = "WeaponsTab", [KIND_ABILITY] = "AbilitiesTab", [KIND_ROBUX] = "RobuxTab" }
-local GRID_NAMES = { [KIND_WEAPON] = "WeaponGrid", [KIND_ABILITY] = "AbilityGrid", [KIND_ROBUX] = "RobuxGrid" }
-local CATALOG_FOLDERS = { [KIND_WEAPON] = "Weapons", [KIND_ABILITY] = "Abilities", [KIND_ROBUX] = "Robux" }
--- Attributes that configure an item rather than describe it; everything else is a stat row.
-local HIDDEN_ATTRIBUTES = { Price = true, Description = true, GamePassId = true, ProductId = true }
+local KINDS = Catalog.KINDS
+local TAB_NAMES = { [Catalog.KIND_WEAPONS] = "WeaponsTab", [Catalog.KIND_ABILITIES] = "AbilitiesTab", [Catalog.KIND_ROBUX] = "RobuxTab" }
+local GRID_NAMES = { [Catalog.KIND_WEAPONS] = "WeaponGrid", [Catalog.KIND_ABILITIES] = "AbilityGrid", [Catalog.KIND_ROBUX] = "RobuxGrid" }
 
 local MODE_SHOP = "Shop"
 local MODE_INVENTORY = "Inventory"
 
 type RobuxInfo = { price: number?, icon: string?, description: string? }
-type Item = { kind: string, name: string, template: Instance, passId: number?, productId: number?, info: RobuxInfo? }
-type Card = { item: Item, frame: GuiButton, price: TextLabel, action: TextButton, icon: ImageLabel, cost: number, baseColor: Color3 }
+type Item = { kind: string, name: string, data: Catalog.ItemData, passId: number?, productId: number?, info: RobuxInfo? }
+type Card = { item: Item, frame: GuiButton, price: TextLabel, action: TextButton, icon: ImageLabel, tag: Frame, cost: number, baseColor: Color3 }
+type Spin = { focus: Vector3, baseDirection: Vector3, distance: number, angle: number, dragging: boolean }
 type Panel = {
 	placeholder: GuiObject,
 	content: GuiObject,
 	viewport: ViewportFrame,
 	icon: ImageLabel,
+	tag: Frame,
 	name: TextLabel,
 	description: TextLabel,
 	stats: GuiObject,
 	price: TextLabel,
 	action: TextButton,
+	spin: Spin?,
 }
 type Modal = {
 	mode: string,
@@ -84,10 +89,9 @@ type Modal = {
 
 local localPlayer = Players.LocalPlayer
 local coins = 0
-local ownedWeapons: { [string]: boolean } = {}
-local ownedAbilities: { [string]: boolean } = {}
+local owned: { [string]: { string } } = {}
+local equipped: { [string]: string } = {}
 local ownedPasses: { [number]: boolean } = {}
-local equippedWeapon = Constants.VIEWMODEL_DEFAULT_WEAPON
 
 local modals: { Modal } = {}
 local scrim: TextButton
@@ -157,25 +161,16 @@ local function hoverLift(button: TextButton, base: () -> Color3)
 	end)
 end
 
-local function itemPrice(template: Instance): number
-	local price = template:GetAttribute("Price")
-	if typeof(price) == "number" then
-		return price
+local function isOwned(item: Item): boolean
+	if item.kind == Catalog.KIND_ROBUX then
+		return item.passId ~= nil and ownedPasses[item.passId] == true
 	end
-	return Constants.SHOP_DEFAULT_PRICE
+	local list = owned[item.kind]
+	return list ~= nil and table.find(list, item.name) ~= nil
 end
 
-local function isOwned(item: Item): boolean
-	if item.kind == KIND_WEAPON then
-		return ownedWeapons[item.name] == true
-	end
-	if item.kind == KIND_ABILITY then
-		return ownedAbilities[item.name] == true
-	end
-	if item.passId then
-		return ownedPasses[item.passId] == true
-	end
-	return false
+local function isEquipped(item: Item): boolean
+	return equipped[item.kind] == item.name
 end
 
 local function fetchRobuxInfo(item: Item)
@@ -207,35 +202,25 @@ end
 local function loadItems(): { Item }
 	local items: { Item } = {}
 	for _, kind in KINDS do
-		local folder = ReplicatedStorage:FindFirstChild(CATALOG_FOLDERS[kind])
-		if not folder then continue end
-		for _, template in folder:GetChildren() do
-			if kind == KIND_WEAPON and template:IsA("Model") then
-				table.insert(items, { kind = kind, name = template.Name, template = template })
-			elseif kind == KIND_ABILITY and template:IsA("Folder") then
-				table.insert(items, { kind = kind, name = template.Name, template = template })
-			elseif kind == KIND_ROBUX then
-				local passId = template:GetAttribute("GamePassId")
-				local productId = template:GetAttribute("ProductId")
-				local item: Item = {
-					kind = kind,
-					name = template.Name,
-					template = template,
-					passId = if typeof(passId) == "number" then passId else nil,
-					productId = if typeof(productId) == "number" then productId else nil,
-				}
-				if item.passId or item.productId then
-					table.insert(items, item)
-					fetchRobuxInfo(item)
-				end
+		for _, entry in Catalog.items(kind) do
+			local item: Item = { kind = kind, name = entry.name, data = entry.data }
+			if kind == Catalog.KIND_ROBUX then
+				item.passId = entry.data.gamePassId
+				item.productId = entry.data.productId
+				if not (item.passId or item.productId) then continue end
+				fetchRobuxInfo(item)
 			end
+			table.insert(items, item)
 		end
 	end
 	return items
 end
 
-local function fillWeaponPreview(viewport: ViewportFrame, template: Model)
+-- Fills the viewport and returns the framing so the details panel can orbit it.
+local function fillWeaponPreview(viewport: ViewportFrame, item: Item): Spin?
 	viewport:ClearAllChildren()
+	local template = Catalog.model(item.kind, item.name)
+	if not template then return nil end
 	local model = template:Clone()
 	model.Parent = viewport
 	local box, size = model:GetBoundingBox()
@@ -255,20 +240,12 @@ local function fillWeaponPreview(viewport: ViewportFrame, template: Model)
 	camera.CFrame = CFrame.lookAt(box.Position + viewDirection * distance, box.Position)
 	camera.Parent = viewport
 	viewport.CurrentCamera = camera
+	return { focus = box.Position, baseDirection = viewDirection, distance = distance, angle = 0, dragging = false }
 end
 
-local function fillAbilityIcon(icon: ImageLabel, template: Instance)
-	local source = template:FindFirstChild("AbilityIcon")
-	if source and source:IsA("ImageLabel") then
-		icon.Image = source.Image
-		icon.ImageColor3 = source.ImageColor3
-	end
-end
-
--- A Robux item's icon is a child ImageLabel named Icon if authored, else the marketplace icon.
-local function fillRobuxIcon(icon: ImageLabel, item: Item)
-	local source = item.template:FindFirstChild("Icon")
-	if source and source:IsA("ImageLabel") then
+local function fillIcon(icon: ImageLabel, item: Item)
+	local source = Catalog.icon(item.kind, item.name)
+	if source then
 		icon.Image = source.Image
 		icon.ImageColor3 = source.ImageColor3
 	elseif item.info and item.info.icon then
@@ -276,26 +253,21 @@ local function fillRobuxIcon(icon: ImageLabel, item: Item)
 	end
 end
 
-local function fillPreview(viewport: ViewportFrame, icon: ImageLabel, item: Item)
-	if item.kind == KIND_WEAPON then
-		fillWeaponPreview(viewport, item.template :: Model)
+local function fillPreview(viewport: ViewportFrame, icon: ImageLabel, item: Item): Spin?
+	if item.kind == Catalog.KIND_WEAPONS then
 		viewport.Visible = true
 		icon.Visible = false
-		return
+		return fillWeaponPreview(viewport, item)
 	end
 	viewport.Visible = false
 	icon.Visible = true
-	if item.kind == KIND_ABILITY then
-		fillAbilityIcon(icon, item.template)
-	else
-		fillRobuxIcon(icon, item)
-	end
+	fillIcon(icon, item)
+	return nil
 end
 
 local function description(item: Item): string
-	local text = item.template:GetAttribute("Description")
-	if typeof(text) == "string" and text ~= "" then
-		return text
+	if item.data.description and item.data.description ~= "" then
+		return item.data.description
 	end
 	if item.info and item.info.description then
 		return item.info.description
@@ -313,25 +285,6 @@ local function formatStat(value: any): string
 	return tostring(value)
 end
 
--- Every attribute that isn't configuration is a stat; abilities also list their params.
-local function statRows(item: Item): { { name: string, value: string } }
-	local rows: { { name: string, value: string } } = {}
-	for name, value in item.template:GetAttributes() do
-		if not HIDDEN_ATTRIBUTES[name] then
-			table.insert(rows, { name = name, value = formatStat(value) })
-		end
-	end
-	if item.kind == KIND_ABILITY then
-		for name, value in Abilities.params(item.name) :: any do
-			table.insert(rows, { name = name, value = formatStat(value) })
-		end
-	end
-	table.sort(rows, function(a, b)
-		return a.name < b.name
-	end)
-	return rows
-end
-
 local function robuxPriceText(item: Item): string
 	if item.info and item.info.price then
 		return "R$ " .. item.info.price
@@ -341,7 +294,7 @@ end
 
 local function onCardActivated(modal: Modal, card: Card)
 	local item = card.item
-	if item.kind == KIND_ROBUX then
+	if item.kind == Catalog.KIND_ROBUX then
 		if item.passId and item.passId > 0 and not isOwned(item) then
 			MarketplaceService:PromptGamePassPurchase(localPlayer, item.passId)
 		elseif item.productId and item.productId > 0 then
@@ -355,8 +308,8 @@ local function onCardActivated(modal: Modal, card: Card)
 		end
 		return
 	end
-	if item.kind == KIND_WEAPON and isOwned(item) and equippedWeapon ~= item.name then
-		ShopEquipRemote:FireServer(item.name)
+	if isOwned(item) and not isEquipped(item) then
+		ShopEquipRemote:FireServer(item.kind, item.name)
 	end
 end
 
@@ -367,24 +320,49 @@ local function styleAction(action: TextButton, text: string, color: Color3, text
 	action.BackgroundTransparency = transparency
 end
 
+local function buildTag(parent: GuiObject, modal: Modal, fontSource: TextLabel): Frame
+	local tag = Instance.new("Frame")
+	tag.Name = "EquippedTag"
+	tag.AnchorPoint = Vector2.new(1, 0)
+	tag.Position = UDim2.fromScale(1, 0)
+	tag.Size = TAG_SIZE
+	tag.BackgroundColor3 = modal.accent
+	tag.BorderSizePixel = 0
+	tag.ZIndex = parent.ZIndex + 2
+	tag.Visible = false
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.FontFace = fontSource.FontFace
+	label.Text = TAG_TEXT
+	label.TextScaled = true
+	label.TextColor3 = modal.panelColor
+	label.ZIndex = tag.ZIndex + 1
+	label.Parent = tag
+	tag.Parent = parent
+	return tag
+end
+
 local function mirrorPanel(modal: Modal, card: Card)
 	local panel = modal.panel
 	if not panel or modal.selected ~= card then return end
 	panel.price.Text = card.price.Text
 	panel.description.Text = description(card.item)
+	panel.tag.Visible = card.tag.Visible
 	styleAction(panel.action, card.action.Text, card.action.BackgroundColor3, card.action.TextColor3, card.action.BackgroundTransparency)
-	if card.item.kind == KIND_ROBUX then
-		fillRobuxIcon(panel.icon, card.item)
+	if card.item.kind == Catalog.KIND_ROBUX then
+		fillIcon(panel.icon, card.item)
 	end
 end
 
 local function refreshCard(modal: Modal, card: Card)
 	local item = card.item
-	local owned = isOwned(item)
-	if item.kind == KIND_ROBUX then
-		fillRobuxIcon(card.icon, item)
+	local isOwnedNow = isOwned(item)
+	card.tag.Visible = isEquipped(item)
+	if item.kind == Catalog.KIND_ROBUX then
+		fillIcon(card.icon, item)
 		card.frame.Visible = modal.mode == MODE_SHOP
-		if owned then
+		if isOwnedNow then
 			card.price.Text = "OWNED"
 			card.baseColor = MUTED_BUTTON_COLOR
 			styleAction(card.action, "OWNED", MUTED_BUTTON_COLOR, modal.dimColor, 0)
@@ -398,7 +376,7 @@ local function refreshCard(modal: Modal, card: Card)
 	end
 	if modal.mode == MODE_SHOP then
 		card.frame.Visible = true
-		if owned then
+		if isOwnedNow then
 			card.price.Text = "OWNED"
 			card.baseColor = MUTED_BUTTON_COLOR
 			styleAction(card.action, "OWNED", MUTED_BUTTON_COLOR, modal.dimColor, 0)
@@ -412,12 +390,9 @@ local function refreshCard(modal: Modal, card: Card)
 		return
 	end
 
-	card.frame.Visible = owned
+	card.frame.Visible = isOwnedNow
 	card.price.Text = ""
-	if item.kind ~= KIND_WEAPON then
-		card.baseColor = MUTED_BUTTON_COLOR
-		styleAction(card.action, "OWNED", MUTED_BUTTON_COLOR, modal.dimColor, 0)
-	elseif equippedWeapon == item.name then
+	if isEquipped(item) then
 		card.baseColor = MUTED_BUTTON_COLOR
 		styleAction(card.action, "EQUIPPED", MUTED_BUTTON_COLOR, modal.dimColor, 0)
 	else
@@ -433,21 +408,21 @@ local function selectCard(modal: Modal, card: Card)
 	if not panel then return end
 	panel.placeholder.Visible = false
 	panel.content.Visible = true
-	fillPreview(panel.viewport, panel.icon, card.item)
-	panel.name.Text = card.item.name
+	panel.spin = fillPreview(panel.viewport, panel.icon, card.item)
+	panel.name.Text = card.item.data.displayName
 	for _, child in panel.stats:GetChildren() do
 		if child:IsA("GuiObject") then
 			child:Destroy()
 		end
 	end
 	if statRowTemplate then
-		for index, row in statRows(card.item) do
+		for index, row in card.item.data.stats or {} do
 			local line = statRowTemplate:Clone()
 			line.LayoutOrder = index
 			local nameLabel = line:WaitForChild("StatName") :: TextLabel
 			local valueLabel = line:WaitForChild("StatValue") :: TextLabel
-			nameLabel.Text = row.name:upper()
-			valueLabel.Text = row.value
+			nameLabel.Text = tostring(row[1]):upper()
+			valueLabel.Text = formatStat(row[2])
 			line.Visible = true
 			line.Parent = panel.stats
 		end
@@ -461,17 +436,27 @@ local function buildCard(modal: Modal, item: Item)
 	local card = cardTemplate:Clone()
 	card.Name = item.name
 
-	local inset = card:WaitForChild("Inset")
+	local inset = card:WaitForChild("Inset") :: GuiObject
 	local preview = inset:WaitForChild("Preview") :: ViewportFrame
 	local icon = inset:WaitForChild("Icon") :: ImageLabel
 	fillPreview(preview, icon, item)
 	local nameLabel = card:WaitForChild("ItemName") :: TextLabel
-	nameLabel.Text = item.name
+	nameLabel.Text = item.data.displayName
 	local price = card:WaitForChild("Price") :: TextLabel
 	price.TextColor3 = modal.accent
 	local action = card:WaitForChild("Action") :: TextButton
+	local tag = buildTag(inset, modal, nameLabel)
 
-	local record: Card = { item = item, frame = card, price = price, action = action, icon = icon, cost = itemPrice(item.template), baseColor = modal.accent }
+	local record: Card = {
+		item = item,
+		frame = card,
+		price = price,
+		action = action,
+		icon = icon,
+		tag = tag,
+		cost = item.data.price or 0,
+		baseColor = modal.accent,
+	}
 	card.Activated:Connect(function()
 		selectCard(modal, record)
 	end)
@@ -597,21 +582,55 @@ local function resolveScrim(lobbyGui: ScreenGui)
 	scrim.Activated:Connect(closeAll)
 end
 
+-- The details preview orbits the weapon: it spins on its own and follows a horizontal drag.
+local function bindSpin(panel: Panel)
+	panel.viewport.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			if panel.spin then panel.spin.dragging = true end
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			if panel.spin then panel.spin.dragging = false end
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		local spin = panel.spin
+		if not spin or not spin.dragging then return end
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			spin.angle += input.Delta.X * PREVIEW_DRAG_SENSITIVITY
+		end
+	end)
+	RunService.RenderStepped:Connect(function(dt)
+		local spin = panel.spin
+		local camera = panel.viewport.CurrentCamera
+		if not spin or not camera or not panel.viewport.Visible then return end
+		if not spin.dragging then
+			spin.angle += PREVIEW_SPIN_SPEED * dt
+		end
+		local direction = CFrame.Angles(0, math.rad(spin.angle), 0):VectorToWorldSpace(spin.baseDirection)
+		camera.CFrame = CFrame.lookAt(spin.focus + direction * spin.distance, spin.focus)
+	end)
+end
+
 local function resolvePanel(modal: Modal)
 	local details = modal.frame:FindFirstChild("Details")
 	if not details then return end
 	local content = details:WaitForChild("Content")
-	local preview = content:WaitForChild("Preview")
+	local preview = content:WaitForChild("Preview") :: GuiObject
+	local name = content:WaitForChild("ItemName") :: TextLabel
 	local panel: Panel = {
 		placeholder = details:WaitForChild("Placeholder") :: GuiObject,
 		content = content :: GuiObject,
 		viewport = preview:WaitForChild("Viewport") :: ViewportFrame,
 		icon = preview:WaitForChild("Icon") :: ImageLabel,
-		name = content:WaitForChild("ItemName") :: TextLabel,
+		tag = buildTag(preview, modal, name),
+		name = name,
 		description = content:WaitForChild("Description") :: TextLabel,
 		stats = content:WaitForChild("Stats") :: GuiObject,
 		price = content:WaitForChild("Price") :: TextLabel,
 		action = content:WaitForChild("Action") :: TextButton,
+		spin = nil,
 	}
 	panel.placeholder.Visible = true
 	panel.content.Visible = false
@@ -623,6 +642,7 @@ local function resolvePanel(modal: Modal)
 	hoverLift(panel.action, function()
 		return if modal.selected then modal.selected.baseColor else modal.accent
 	end)
+	bindSpin(panel)
 	modal.panel = panel
 end
 
@@ -715,17 +735,10 @@ function ShopController.init()
 	end)
 	refreshAll()
 
-	ShopStateRemote.OnClientEvent:Connect(function(newCoins: number, weaponList: { string }, newEquipped: string, abilityList: { string })
-		coins = newCoins
-		ownedWeapons = {}
-		for _, name in weaponList do
-			ownedWeapons[name] = true
-		end
-		ownedAbilities = {}
-		for _, name in abilityList do
-			ownedAbilities[name] = true
-		end
-		equippedWeapon = newEquipped
+	ShopStateRemote.OnClientEvent:Connect(function(state: { coins: number, owned: { [string]: { string } }, equipped: { [string]: string } })
+		coins = state.coins
+		owned = state.owned
+		equipped = state.equipped
 		refreshAll()
 	end)
 
