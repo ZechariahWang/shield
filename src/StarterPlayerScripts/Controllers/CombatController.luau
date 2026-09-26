@@ -149,8 +149,12 @@ local function getAim(headPosition: Vector3): (Vector3?, Vector3?, BasePart?)
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = { localPlayer.Character }
 
-	local result = Workspace:Raycast(ray.Origin, ray.Direction * Constants.PISTOL_RANGE, params)
-	local aimPoint = ray.Origin + ray.Direction * Constants.PISTOL_RANGE
+	-- Start at the character's depth along the ray so geometry between the camera
+	-- and the player (a wall the camera clipped into) can't become the aim point.
+	local depth = (headPosition - ray.Origin):Dot(ray.Direction)
+	local start = ray.Origin + ray.Direction * math.max(depth, 0)
+	local result = Workspace:Raycast(start, ray.Direction * Constants.PISTOL_RANGE, params)
+	local aimPoint = start + ray.Direction * Constants.PISTOL_RANGE
 	local hitPart: BasePart? = nil
 	if result then
 		aimPoint = result.Position

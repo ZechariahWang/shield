@@ -15,7 +15,7 @@
     "StarterPlayer": {
       "$ignoreUnknownInstances": true,
       "$properties": {
-        "DevCameraOcclusionMode": "Invisicam"
+        "DevCameraOcclusionMode": "Zoom"
       },
       "StarterPlayerScripts": {
         "$path": "src/StarterPlayerScripts"
