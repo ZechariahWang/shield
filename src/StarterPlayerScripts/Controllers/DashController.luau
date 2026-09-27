@@ -6,6 +6,7 @@ local Constants = require(ReplicatedStorage.Shared.Constants)
 local Abilities = require(ReplicatedStorage.Shared.Abilities)
 local AbilityHUDController = require(script.Parent.AbilityHUDController)
 local MovementController = require(script.Parent.MovementController)
+local SettingsController = require(script.Parent.SettingsController)
 
 local DashController = {}
 
@@ -59,7 +60,7 @@ function DashController.init()
 
 	UserInputService.InputBegan:Connect(function(input, gpe)
 		if gpe then return end
-		if input.KeyCode == Enum.KeyCode.E then
+		if SettingsController.matches(input, "Dash") then
 			DashController.tryDash()
 		end
 	end)

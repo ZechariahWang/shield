@@ -118,6 +118,19 @@ Constants.STORE_LOAD_RETRIES = 3
 Constants.STORE_RETRY_DELAY = 1         -- seconds between failed load attempts
 Constants.STORE_AUTOSAVE_INTERVAL = 120 -- seconds between background saves of changed wallets
 
+-- SETTINGS (per player, saved inside the Store record; edited from the lobby on PC)
+Constants.DEFAULT_KEYBINDS = {           -- Enum.KeyCode names or MouseButton1/2/3
+	Shoot = "MouseButton1",
+	Shield = "Q",
+	Dash = "E",
+	Sprint = "LeftShift",
+	Aim = "MouseButton2",
+}
+Constants.SENSITIVITY_DEFAULT = 1        -- UserInputService.MouseDeltaSensitivity: scales the mouse delta the stock camera turns with
+Constants.SENSITIVITY_MIN = 0.1
+Constants.SENSITIVITY_MAX = 4
+Constants.SENSITIVITY_STEP = 0.1
+
 -- PLAYER STATES
 Constants.STATE_LOBBY = "Lobby"     -- also used for eliminated players (spectating from the lobby)
 Constants.STATE_SAFE = "Safe"       -- alive in the arena

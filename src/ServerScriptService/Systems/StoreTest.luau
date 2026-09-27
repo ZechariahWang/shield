@@ -53,11 +53,19 @@ return function()
 	assert(not Store._equip(record, "Abilities", "TestAbility"), "cannot equip unowned")
 	assert(not Store._equip(record, "Weapons", 5), "non-string name")
 
+	-- Settings ride in the record and survive the merge; garbage settings fall back.
+	local withSettings = Store._merge({ settings = { sensitivity = 2, keybinds = { Shoot = "F" } } }, PRICES)
+	assert(withSettings.settings.sensitivity == 2 and withSettings.settings.keybinds.Shoot == "F", "settings merged")
+	assert(withSettings.settings.keybinds.Dash == "E", "settings default filled")
+	assert(fresh.settings.keybinds.Shoot == "MouseButton1", "fresh settings")
+	assert(garbage.settings.sensitivity == 1, "garbage settings")
+
 	-- The save table survives a merge round trip unchanged.
 	local again = Store._merge(record, PRICES)
 	assert(again.coins == record.coins, "round trip coins")
 	assert(#again.owned.Weapons == #record.owned.Weapons, "round trip owned")
 	assert(again.equipped.Weapons == record.equipped.Weapons, "round trip equipped")
+	assert(again.settings.keybinds.Shoot == record.settings.keybinds.Shoot, "round trip settings")
 
 	print("StoreTest: all passed")
 end

@@ -8,6 +8,7 @@ local Workspace = game:GetService("Workspace")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local CombatController = require(script.Parent.CombatController)
+local SettingsController = require(script.Parent.SettingsController)
 
 -- Client-side movement extras while combat is active: hold Shift to sprint,
 -- hold right click to aim (FOV zoom only), and press jump again in the air for
@@ -266,16 +267,16 @@ end
 function MovementController.init()
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
-		if input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.RightShift then
+		if SettingsController.matches(input, "Sprint") then
 			shiftHeld = true
-		elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+		elseif SettingsController.matches(input, "Aim") then
 			aimHeld = true
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
-		if input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.RightShift then
+		if SettingsController.matches(input, "Sprint") then
 			shiftHeld = false
-		elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+		elseif SettingsController.matches(input, "Aim") then
 			aimHeld = false
 		end
 	end)

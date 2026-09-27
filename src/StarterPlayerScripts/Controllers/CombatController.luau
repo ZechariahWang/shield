@@ -6,6 +6,7 @@ local Workspace = game:GetService("Workspace")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local ShiftLockController = require(script.Parent.ShiftLockController)
+local SettingsController = require(script.Parent.SettingsController)
 
 local CombatController = {}
 
@@ -235,9 +236,9 @@ function CombatController.init()
 
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if SettingsController.matches(input, "Shoot") then
 			CombatController.tryShoot()
-		elseif input.KeyCode == Enum.KeyCode.Q then
+		elseif SettingsController.matches(input, "Shield") then
 			CombatController.tryToggleShield()
 		end
 	end)

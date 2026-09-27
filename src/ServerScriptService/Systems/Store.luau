@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local Catalog = require(ReplicatedStorage.Shared.Catalog)
+local Settings = require(ReplicatedStorage.Shared.Settings)
 
 local Store = {}
 
@@ -15,6 +16,7 @@ export type Record = {
 	coins: number,
 	owned: { [string]: { string } },
 	equipped: { [string]: string },
+	settings: Settings.Record,
 }
 
 type Prices = { [string]: { [string]: number } }
@@ -64,8 +66,10 @@ function Store._merge(raw: any, known: Prices): Record
 		coins = Constants.SHOP_STARTING_COINS,
 		owned = {},
 		equipped = {},
+		settings = Settings.merge(nil),
 	}
 	if typeof(raw) ~= "table" then raw = {} end
+	record.settings = Settings.merge(raw.settings)
 	if typeof(raw.coins) == "number" and raw.coins >= 0 then
 		record.coins = math.floor(raw.coins)
 	end
@@ -174,6 +178,7 @@ local function sendState(player: Player)
 		coins = wallet.record.coins,
 		owned = wallet.record.owned,
 		equipped = wallet.record.equipped,
+		settings = wallet.record.settings,
 	})
 end
 
@@ -260,6 +265,14 @@ local function equip(player: Player, kind: any, name: any)
 	end
 end
 
+local function updateSettings(player: Player, raw: any)
+	local wallet = wallets[player]
+	if not wallet or not wallet.record then return end
+	wallet.record.settings = Settings.merge(raw)
+	markDirty(wallet)
+	sendState(player)
+end
+
 local function coinPack(productId: number): number?
 	for _, item in Catalog.items(Catalog.KIND_ROBUX) do
 		if item.data.productId == productId and typeof(item.data.coins) == "number" then
@@ -309,9 +322,11 @@ function Store.init()
 	ShopStateRemote = ensureRemote(Remotes, "ShopState")
 	local purchaseRemote = ensureRemote(Remotes, "ShopPurchase")
 	local equipRemote = ensureRemote(Remotes, "ShopEquip")
+	local settingsRemote = ensureRemote(Remotes, "SettingsUpdate")
 
 	purchaseRemote.OnServerEvent:Connect(purchase)
 	equipRemote.OnServerEvent:Connect(equip)
+	settingsRemote.OnServerEvent:Connect(updateSettings)
 	MarketplaceService.ProcessReceipt = processReceipt
 	-- The join-time state can beat the client's controller; the client asks again once it's listening.
 	ShopStateRemote.OnServerEvent:Connect(sendState)

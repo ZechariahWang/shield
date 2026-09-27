@@ -557,6 +557,35 @@ local function openModal(target: Modal)
 	setModalOpen(target, true)
 end
 
+-- A plain modal (no tabs or cards) that shares the scrim, the open and close
+-- animation and the lobby rules. Returns its open function; `Close` closes it.
+function ShopController.registerModal(frame: Frame): () -> ()
+	local close = frame:WaitForChild("Close") :: TextButton
+	local title = frame:WaitForChild("Title") :: TextLabel
+	local modal = {
+		frame = frame,
+		scale = frame:WaitForChild("UIScale") :: UIScale,
+		openPosition = frame.Position,
+		open = false,
+		animGen = 0,
+		cards = {},
+		textColor = title.TextColor3,
+		dimColor = close.TextColor3,
+	} :: any
+	frame.Visible = false
+	modal.scale.Scale = 1
+	hoverText(close, modal.textColor, function()
+		return modal.dimColor
+	end)
+	close.Activated:Connect(function()
+		setModalOpen(modal, false)
+	end)
+	table.insert(modals, modal)
+	return function()
+		openModal(modal)
+	end
+end
+
 -- The lobby UI exists only for players standing in the lobby: the state flips to
 -- Lobby on elimination and after the round-end teleport, and to Safe at Reveal.
 local function reconcileLobbyUI()
