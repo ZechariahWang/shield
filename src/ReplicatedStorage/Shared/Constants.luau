@@ -93,6 +93,12 @@ Constants.MOVEMENT_ANIM_FADE = 0.15           -- seconds the movement blend ease
 Constants.LEAN_MAX_ANGLE = 8                  -- degrees the torso tips toward the movement direction at full input
 Constants.LEAN_RATE = 10                      -- exp-decay rate of the lean toward its target (server Heartbeat)
 
+-- RAGDOLL (a corpse clone left where a combatant was eliminated; only during Round)
+Constants.RAGDOLL_LIFETIME = 5            -- seconds before the corpse is removed
+Constants.RAGDOLL_IMPULSE = 30            -- studs per second added away from the killer
+Constants.RAGDOLL_JOINT_LIMIT = 45        -- degrees each ball socket may swing
+Constants.RAGDOLL_DENSITY = 0.3           -- light enough that a corpse cannot shove a living player
+
 -- KILL CAM (victim's camera swings to face the killer after elimination)
 Constants.KILL_CAM_TIME = 3
 Constants.KILL_CAM_DISTANCE = 7

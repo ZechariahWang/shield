@@ -9,6 +9,7 @@ local CombatSystem = require(script.Parent.CombatSystem)
 local AbilitySystem = require(script.Parent.AbilitySystem)
 local MapManager = require(script.Parent.MapManager)
 local BotSystem = require(script.Parent.BotSystem)
+local RagdollSystem = require(script.Parent.RagdollSystem)
 local Store = require(script.Parent.Store)
 
 local RoundManager = {}
@@ -215,6 +216,7 @@ local function endRound(reason: string, winners: { string })
 	end
 
 	BotSystem.despawn()
+	RagdollSystem.clear()
 	MapManager.unloadMap()
 
 	task.wait(Constants.END_TIME)
@@ -349,6 +351,9 @@ local function onPlayerEliminated(victim: Model, killer: Model?)
 	if killerPlayer then
 		Store.addCoins(killerPlayer, Constants.SHOP_COINS_PER_KILL)
 	end
+
+	-- Before the teleport so the corpse lands where they died.
+	RagdollSystem.spawn(victim, killer)
 
 	local victimPlayer = Players:GetPlayerFromCharacter(victim)
 	if victimPlayer then
