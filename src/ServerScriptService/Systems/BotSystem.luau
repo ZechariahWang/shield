@@ -1,3 +1,4 @@
+local CollectionService = game:GetService("CollectionService")
 local PathfindingService = game:GetService("PathfindingService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -235,6 +236,7 @@ function BotSystem.spawn()
 			hum.WalkSpeed = Constants.SAFE_WALKSPEED
 		end
 		char:PivotTo(cframe + Vector3.new(0, 4, 0))
+		CollectionService:AddTag(char, Constants.IN_ROUND_TAG)
 		char.Parent = folder
 		bots[char] = true
 		CombatSystem.registerBot(char)

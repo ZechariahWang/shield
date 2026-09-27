@@ -121,6 +121,7 @@ Constants.STORE_AUTOSAVE_INTERVAL = 120 -- seconds between background saves of c
 -- PLAYER STATES
 Constants.STATE_LOBBY = "Lobby"     -- also used for eliminated players (spectating from the lobby)
 Constants.STATE_SAFE = "Safe"       -- alive in the arena
+Constants.IN_ROUND_TAG = "InRound"  -- CollectionService tag on every Safe Player and every live bot Model
 
 -- ROUND PHASES
 Constants.PHASE_LOBBY = "Lobby"

@@ -1,3 +1,4 @@
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -17,6 +18,12 @@ function PlayerState.set(player: Player, newState: string)
 	end
 	local oldState = states[player]
 	states[player] = newState
+
+	if newState == Constants.STATE_SAFE then
+		CollectionService:AddTag(player, Constants.IN_ROUND_TAG)
+	else
+		CollectionService:RemoveTag(player, Constants.IN_ROUND_TAG)
+	end
 
 	if PlayerStateRemote then
 		PlayerStateRemote:FireAllClients(player, newState)

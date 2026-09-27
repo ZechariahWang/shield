@@ -1,3 +1,4 @@
+local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -102,6 +103,7 @@ function RagdollSystem.spawn(victim: Model, killer: Model?): Model?
 	victim.Archivable = true
 	local corpse = victim:Clone()
 	victim.Archivable = wasArchivable
+	CollectionService:RemoveTag(corpse, Constants.IN_ROUND_TAG)
 	corpse.Name = victim.Name .. "Ragdoll"
 	RagdollSystem._build(corpse)
 

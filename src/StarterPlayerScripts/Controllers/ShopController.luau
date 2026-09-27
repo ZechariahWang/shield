@@ -107,7 +107,7 @@ local ShopEquipRemote: RemoteEvent
 
 local refreshAll: () -> ()
 
-local function bindLobbyButton(button: TextButton, onClick: () -> ())
+function ShopController.bindLobbyButton(button: TextButton, onClick: () -> ())
 	local scale = button:WaitForChild("UIScale") :: UIScale
 	local hovering = false
 	local pressing = false
@@ -727,10 +727,10 @@ function ShopController.init()
 	resolveScrim(lobbyGui)
 	local shop = resolveModal(lobbyGui, "ShopModal", MODE_SHOP, items)
 	local inventory = resolveModal(lobbyGui, "InventoryModal", MODE_INVENTORY, items)
-	bindLobbyButton(shopButton, function()
+	ShopController.bindLobbyButton(shopButton, function()
 		toggleModal(shop)
 	end)
-	bindLobbyButton(inventoryButton, function()
+	ShopController.bindLobbyButton(inventoryButton, function()
 		toggleModal(inventory)
 	end)
 	refreshAll()
