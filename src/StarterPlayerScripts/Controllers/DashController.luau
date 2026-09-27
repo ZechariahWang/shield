@@ -25,7 +25,7 @@ local function canDash(): boolean
 	return localState == Constants.STATE_SAFE
 end
 
-local function tryDash()
+function DashController.tryDash()
 	if not canDash() then return end
 	-- Only Dash has behavior; the key does nothing with another ability equipped.
 	if AbilityHUDController.equippedAbility() ~= DASH then return end
@@ -60,7 +60,7 @@ function DashController.init()
 	UserInputService.InputBegan:Connect(function(input, gpe)
 		if gpe then return end
 		if input.KeyCode == Enum.KeyCode.E then
-			tryDash()
+			DashController.tryDash()
 		end
 	end)
 end

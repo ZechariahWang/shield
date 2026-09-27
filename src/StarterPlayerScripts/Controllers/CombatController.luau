@@ -166,7 +166,7 @@ local function getAim(headPosition: Vector3): (Vector3?, Vector3?, BasePart?)
 	return offset.Unit, aimPoint, hitPart
 end
 
-local function tryShoot()
+function CombatController.tryShoot()
 	if localState ~= Constants.STATE_SAFE then return end
 	if currentPhase ~= Constants.PHASE_ROUND then return end
 	if shieldStatus == Constants.SHIELD_UP then return end
@@ -188,7 +188,7 @@ local function tryShoot()
 	setMeter(gunMeter, 0, 1, Constants.PISTOL_COOLDOWN, true)
 end
 
-local function tryToggleShield()
+function CombatController.tryToggleShield()
 	if localState ~= Constants.STATE_SAFE then return end
 	if currentPhase ~= Constants.PHASE_ROUND then return end
 
@@ -236,9 +236,9 @@ function CombatController.init()
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			tryShoot()
+			CombatController.tryShoot()
 		elseif input.KeyCode == Enum.KeyCode.Q then
-			tryToggleShield()
+			CombatController.tryToggleShield()
 		end
 	end)
 end
