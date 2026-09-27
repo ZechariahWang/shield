@@ -28,11 +28,31 @@ local function isBodyJoint(model: Model, joint: Motor6D): boolean
 	return part0.Parent == model and part1.Parent == model
 end
 
+-- Shirts, pants and body colors only render through a Humanoid, so the corpse keeps
+-- one, dead. Its state is switched to Physics once the corpse is in the world (see
+-- spawn): a Humanoid in any standing state keeps holding the torso up, and
+-- ChangeState is a no-op on an unparented model.
+local function neutralizeHumanoid(hum: Humanoid)
+	hum.BreakJointsOnDeath = false
+	hum.RequiresNeck = false
+	hum.AutoRotate = false
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	hum.Health = 0
+	for _, child in hum:GetChildren() do
+		if child:IsA("Animator") then
+			child:Destroy()
+		end
+	end
+end
+
 -- Turns a character-shaped model into a ragdoll in place. Returns the number of
 -- body joints converted. Exposed for RagdollTest.
 function RagdollSystem._build(model: Model): number
 	for _, child in model:GetDescendants() do
-		if child:IsA("Humanoid") or child:IsA("LuaSourceContainer") or child:IsA("ForceField") or child.Name == "PlayerShield" then
+		if child:IsA("Humanoid") then
+			neutralizeHumanoid(child)
+		elseif child:IsA("LuaSourceContainer") or child:IsA("ForceField") or child.Name == "PlayerShield" then
 			child:Destroy()
 		end
 	end
@@ -95,18 +115,31 @@ function RagdollSystem.spawn(victim: Model, killer: Model?): Model?
 		end
 	end
 	corpse.Parent = folder()
+	local corpseHumanoid = corpse:FindFirstChildOfClass("Humanoid")
+	if corpseHumanoid then
+		corpseHumanoid:ChangeState(Enum.HumanoidStateType.Physics)
+	end
 
-	local velocity = root.AssemblyLinearVelocity
+	-- Always shove the corpse: a perfectly still upright ragdoll (a reset while
+	-- standing) is a stable pose and would sleep on its feet. Away from the killer,
+	-- forward when there is none.
+	local push = root.CFrame.LookVector
 	local killerRoot = killer and killer:FindFirstChild("HumanoidRootPart")
 	if killerRoot and killerRoot:IsA("BasePart") then
 		local away = root.Position - killerRoot.Position
 		away = Vector3.new(away.X, 0, away.Z)
 		if away.Magnitude > 0.01 then
-			velocity += away.Unit * Constants.RAGDOLL_IMPULSE
+			push = away.Unit
 		end
 	end
+	push = Vector3.new(push.X, 0, push.Z)
+	local velocity = root.AssemblyLinearVelocity + push.Unit * Constants.RAGDOLL_IMPULSE
+	-- The server simulates corpses. Left on auto, ownership goes to the nearest client
+	-- (the victim), who is then teleported out of range and never simulates it, so the
+	-- corpse would stand frozen in its death pose for everyone.
 	for _, part in corpse:GetDescendants() do
 		if part:IsA("BasePart") then
+			part:SetNetworkOwner(nil)
 			part.AssemblyLinearVelocity = velocity
 		end
 	end
