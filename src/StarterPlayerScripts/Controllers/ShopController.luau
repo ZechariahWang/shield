@@ -557,14 +557,6 @@ local function openModal(target: Modal)
 	setModalOpen(target, true)
 end
 
-local function toggleModal(target: Modal)
-	if target.open then
-		setModalOpen(target, false)
-	else
-		openModal(target)
-	end
-end
-
 -- The lobby UI exists only for players standing in the lobby: the state flips to
 -- Lobby on elimination and after the round-end teleport, and to Safe at Reveal.
 local function reconcileLobbyUI()
@@ -579,7 +571,6 @@ local function resolveScrim(lobbyGui: ScreenGui)
 	scrim = lobbyGui:WaitForChild("Scrim") :: TextButton
 	scrim.BackgroundTransparency = 1
 	scrim.Visible = false
-	scrim.Activated:Connect(closeAll)
 end
 
 -- The details preview orbits the weapon: it spins on its own and follows a horizontal drag.
@@ -728,10 +719,10 @@ function ShopController.init()
 	local shop = resolveModal(lobbyGui, "ShopModal", MODE_SHOP, items)
 	local inventory = resolveModal(lobbyGui, "InventoryModal", MODE_INVENTORY, items)
 	ShopController.bindLobbyButton(shopButton, function()
-		toggleModal(shop)
+		openModal(shop)
 	end)
 	ShopController.bindLobbyButton(inventoryButton, function()
-		toggleModal(inventory)
+		openModal(inventory)
 	end)
 	refreshAll()
 
