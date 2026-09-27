@@ -10,8 +10,8 @@ local ShopController = require(script.Parent.ShopController)
 -- about through `matches`, and the mouse sensitivity, applied as
 -- UserInputService.MouseDeltaSensitivity (UserGameSettings.MouseSensitivity is
 -- off limits to a LocalScript). The record arrives inside ShopState and every
--- edit goes back through SettingsUpdate. Editing (the lobby SETTINGS modal) is
--- PC only.
+-- edit goes back through SettingsUpdate. The lobby SETTINGS modal edits
+-- sensitivity anywhere; the keybind rows exist only on PC.
 local SettingsController = {}
 
 local localPlayer = Players.LocalPlayer
@@ -19,7 +19,7 @@ local record: Settings.Record = Settings.merge(nil)
 local changed = Instance.new("BindableEvent")
 SettingsController.Changed = changed.Event
 
-type Row = { value: TextButton }
+type Row = { frame: Frame, value: TextButton }
 local rows: { [string]: Row } = {}
 local sensitivityRow: Row?
 local hints: { [string]: TextLabel } = {}
@@ -129,7 +129,7 @@ local function buildRow(template: Frame, parent: Instance, label: string, order:
 			stepSensitivity(1)
 		end)
 	end
-	return { value = value }
+	return { frame = frame, value = value }
 end
 
 local function buildRows(lobbyGui: ScreenGui)
@@ -137,6 +137,7 @@ local function buildRows(lobbyGui: ScreenGui)
 	local container = modalFrame:WaitForChild("Rows")
 	for i, action in Settings.ACTIONS do
 		local row = buildRow(template, container, ROW_LABELS[action], i, false)
+		row.frame.Visible = isPC()
 		rows[action] = row
 		row.value.Activated:Connect(function()
 			listening = if listening == action then nil else action
@@ -160,7 +161,6 @@ function SettingsController.init()
 	buildRows(lobbyGui)
 	local open = ShopController.registerModal(modalFrame)
 	ShopController.bindLobbyButton(button, open)
-	button.Visible = isPC()
 	apply(record)
 
 	ShopStateRemote.OnClientEvent:Connect(function(state: { settings: any })
