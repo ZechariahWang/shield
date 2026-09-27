@@ -29,13 +29,10 @@ end
 local function setToggle(button: TextButton, on: boolean, apply: (boolean) -> ())
 	toggles[button] = on
 	apply(on)
-	-- On: the stroke color fills the button and the label takes the slab color.
-	local stroke = button:FindFirstChildOfClass("UIStroke")
+	-- On: fill and label colors swap.
 	local colors = toggleColors[button]
-	if stroke then
-		button.BackgroundColor3 = if on then stroke.Color else colors.back
-		button.TextColor3 = if on then colors.back else colors.text
-	end
+	button.BackgroundColor3 = if on then colors.text else colors.back
+	button.TextColor3 = if on then colors.back else colors.text
 end
 
 local function bindToggle(button: TextButton, apply: (boolean) -> ())
