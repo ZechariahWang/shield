@@ -80,12 +80,15 @@ Constants.MOVEMENT_ANIMATIONS = {             -- blended by MovementController a
 	Backward = "rbxassetid://128010261091905",
 	Left = "rbxassetid://84426628902537",
 	Right = "rbxassetid://89148728176605",
+	Run = "rbxassetid://100362019423807",       -- takes the forward share of the blend while sprinting
 }
 Constants.DASH_ANIMATIONS = {                 -- one-shot Action priority; a forward or backward dash plays nothing
 	Left = "rbxassetid://87274812929516",
 	Right = "rbxassetid://106434084542928",
 }
+Constants.JUMP_ANIMATION = "rbxassetid://94756604871926"  -- one-shot Action priority on every Jumping state (double jump included)
 Constants.MOVEMENT_ANIM_REFERENCE_SPEED = 16  -- studs per second the walk cycles are authored for; playback speed scales from this
+Constants.MOVEMENT_RUN_REFERENCE_SPEED = 24   -- same for the run cycle (the sprint speed)
 Constants.MOVEMENT_ANIM_FADE = 0.15           -- seconds the movement blend eases between weights
 Constants.LEAN_MAX_ANGLE = 8                  -- degrees the torso tips toward the movement direction at full input
 Constants.LEAN_RATE = 10                      -- exp-decay rate of the lean toward its target (server Heartbeat)

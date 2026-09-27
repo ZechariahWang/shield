@@ -32,6 +32,7 @@ local doubleJumped = false
 local WEIGHT_EPSILON = 0.001 -- a track at exactly 0 weight can be dropped from the blend
 local moveTracks: { [string]: AnimationTrack } = {}
 local dashTracks: { [string]: AnimationTrack } = {}
+local jumpTrack: AnimationTrack? = nil
 
 local function getHumanoid(): Humanoid?
 	local char = localPlayer.Character
@@ -61,6 +62,7 @@ local function bindAnimations(hum: Humanoid)
 	for name, id in Constants.DASH_ANIMATIONS do
 		dashTracks[name] = loadTrack(animator, id, Enum.AnimationPriority.Action, false)
 	end
+	jumpTrack = loadTrack(animator, Constants.JUMP_ANIMATION, Enum.AnimationPriority.Action, false)
 end
 
 -- Root-space move direction: -Z forward, +X right.
@@ -73,7 +75,7 @@ end
 local function stepAnimations()
 	local hum = getHumanoid()
 	if not hum or not moveTracks.Idle then return end
-	local weights = { Idle = 0, Forward = 0, Backward = 0, Left = 0, Right = 0 }
+	local weights = { Idle = 0, Forward = 0, Backward = 0, Left = 0, Right = 0, Run = 0 }
 	local move = localMove(hum)
 	local grounded = hum.FloorMaterial ~= Enum.Material.Air
 	if grounded and move then
@@ -90,16 +92,27 @@ local function stepAnimations()
 			weights.Left *= scale
 			weights.Right *= scale
 		end
+		if sprinting then
+			weights.Run = weights.Forward
+			weights.Forward = 0
+		end
 		weights.Idle = 1 - amount
 	end
 
 	local root = hum.RootPart
 	local velocity = if root then root.AssemblyLinearVelocity else Vector3.zero
 	local horizontalSpeed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
-	local playback = math.max(horizontalSpeed / Constants.MOVEMENT_ANIM_REFERENCE_SPEED, 0.1)
+	local walkPlayback = math.max(horizontalSpeed / Constants.MOVEMENT_ANIM_REFERENCE_SPEED, 0.1)
+	local runPlayback = math.max(horizontalSpeed / Constants.MOVEMENT_RUN_REFERENCE_SPEED, 0.1)
 	for name, track in moveTracks do
 		track:AdjustWeight(math.max(weights[name] or 0, WEIGHT_EPSILON), Constants.MOVEMENT_ANIM_FADE)
-		track:AdjustSpeed(if name == "Idle" then 1 else playback)
+		local playback = walkPlayback
+		if name == "Idle" then
+			playback = 1
+		elseif name == "Run" then
+			playback = runPlayback
+		end
+		track:AdjustSpeed(playback)
 	end
 end
 
@@ -188,6 +201,10 @@ local function bindCharacter(char: Model)
 		if new == Enum.HumanoidStateType.Landed then
 			canDoubleJump = false
 			doubleJumped = false
+		elseif new == Enum.HumanoidStateType.Jumping then
+			if jumpTrack then
+				jumpTrack:Play()
+			end
 		elseif new == Enum.HumanoidStateType.Freefall then
 			-- Wait a beat so the first jump's own Freefall doesn't immediately count as airborne.
 			task.delay(Constants.DOUBLE_JUMP_DELAY, function()
