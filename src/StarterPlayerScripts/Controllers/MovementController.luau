@@ -26,10 +26,94 @@ local fovTween: Tween? = nil
 local canDoubleJump = false
 local doubleJumped = false
 
+-- Movement animations: five looping tracks (idle plus four walk directions) at
+-- Movement priority share weights that sum to 1 while grounded, replacing the stock
+-- Animate walk; airborne they all drop out so the stock jump and fall show.
+local WEIGHT_EPSILON = 0.001 -- a track at exactly 0 weight can be dropped from the blend
+local moveTracks: { [string]: AnimationTrack } = {}
+local dashTracks: { [string]: AnimationTrack } = {}
+
 local function getHumanoid(): Humanoid?
 	local char = localPlayer.Character
 	if not char then return nil end
 	return char:FindFirstChildOfClass("Humanoid")
+end
+
+local function loadTrack(animator: Animator, id: string, priority: Enum.AnimationPriority, looped: boolean): AnimationTrack
+	local animation = Instance.new("Animation")
+	animation.AnimationId = id
+	local track = animator:LoadAnimation(animation)
+	track.Priority = priority
+	track.Looped = looped
+	return track
+end
+
+local function bindAnimations(hum: Humanoid)
+	local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 5)
+	if not animator or not animator:IsA("Animator") then return end
+	moveTracks = {}
+	for name, id in Constants.MOVEMENT_ANIMATIONS do
+		local track = loadTrack(animator, id, Enum.AnimationPriority.Movement, true)
+		track:Play(0, WEIGHT_EPSILON)
+		moveTracks[name] = track
+	end
+	dashTracks = {}
+	for name, id in Constants.DASH_ANIMATIONS do
+		dashTracks[name] = loadTrack(animator, id, Enum.AnimationPriority.Action, false)
+	end
+end
+
+-- Root-space move direction: -Z forward, +X right.
+local function localMove(hum: Humanoid): Vector3?
+	local root = hum.RootPart
+	if not root then return nil end
+	return root.CFrame:VectorToObjectSpace(hum.MoveDirection)
+end
+
+local function stepAnimations()
+	local hum = getHumanoid()
+	if not hum or not moveTracks.Idle then return end
+	local weights = { Idle = 0, Forward = 0, Backward = 0, Left = 0, Right = 0 }
+	local move = localMove(hum)
+	local grounded = hum.FloorMaterial ~= Enum.Material.Air
+	if grounded and move then
+		local amount = math.min(hum.MoveDirection.Magnitude, 1)
+		weights.Forward = math.max(-move.Z, 0)
+		weights.Backward = math.max(move.Z, 0)
+		weights.Left = math.max(-move.X, 0)
+		weights.Right = math.max(move.X, 0)
+		local total = weights.Forward + weights.Backward + weights.Left + weights.Right
+		if total > 0 then
+			local scale = amount / total
+			weights.Forward *= scale
+			weights.Backward *= scale
+			weights.Left *= scale
+			weights.Right *= scale
+		end
+		weights.Idle = 1 - amount
+	end
+
+	local root = hum.RootPart
+	local velocity = if root then root.AssemblyLinearVelocity else Vector3.zero
+	local horizontalSpeed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
+	local playback = math.max(horizontalSpeed / Constants.MOVEMENT_ANIM_REFERENCE_SPEED, 0.1)
+	for name, track in moveTracks do
+		track:AdjustWeight(math.max(weights[name] or 0, WEIGHT_EPSILON), Constants.MOVEMENT_ANIM_FADE)
+		track:AdjustSpeed(if name == "Idle" then 1 else playback)
+	end
+end
+
+-- Plays the sideways dash animation matching the current move direction; a forward
+-- or backward dash has no animation.
+function MovementController.playDashAnimation()
+	local hum = getHumanoid()
+	if not hum then return end
+	local move = localMove(hum)
+	if not move or math.abs(move.X) <= math.abs(move.Z) then return end
+	local track = if move.X > 0 then dashTracks.Right else dashTracks.Left
+	if track then
+		track:Play()
+	end
 end
 
 local function tweenFov(target: number, duration: number)
@@ -77,6 +161,7 @@ local function step()
 	setSprinting(canSprint())
 	aiming = aimHeld and CombatController.isCombatActive()
 	reconcileFov()
+	stepAnimations()
 	if not sprinting then return end
 	local hum = getHumanoid()
 	if hum and hum.WalkSpeed ~= Constants.SPRINT_WALKSPEED then
@@ -98,6 +183,7 @@ local function bindCharacter(char: Model)
 	if not hum or not hum:IsA("Humanoid") then return end
 	canDoubleJump = false
 	doubleJumped = false
+	bindAnimations(hum)
 	hum.StateChanged:Connect(function(_old, new)
 		if new == Enum.HumanoidStateType.Landed then
 			canDoubleJump = false

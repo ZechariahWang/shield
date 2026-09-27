@@ -74,6 +74,19 @@ Constants.MOVEMENT_STEP_HEIGHT = 0.55         -- peak vertical arc of a swinging
 Constants.MOVEMENT_STEP_TIME = 0.18           -- seconds per swing
 Constants.MOVEMENT_TURN_RATE = 14             -- exp-decay rate of HRP yaw toward camera yaw
 Constants.MOVEMENT_GROUND_RAYCAST_DEPTH = 6   -- max stud distance below the ideal foot pos to look for ground
+Constants.MOVEMENT_ANIMATIONS = {             -- blended by MovementController at Movement priority, above the stock Animate walk
+	Idle = "rbxassetid://81009869478028",
+	Forward = "rbxassetid://107961851755533",
+	Backward = "rbxassetid://128010261091905",
+	Left = "rbxassetid://84426628902537",
+	Right = "rbxassetid://89148728176605",
+}
+Constants.DASH_ANIMATIONS = {                 -- one-shot Action priority; a forward or backward dash plays nothing
+	Left = "rbxassetid://87274812929516",
+	Right = "rbxassetid://106434084542928",
+}
+Constants.MOVEMENT_ANIM_REFERENCE_SPEED = 16  -- studs per second the walk cycles are authored for; playback speed scales from this
+Constants.MOVEMENT_ANIM_FADE = 0.15           -- seconds the movement blend eases between weights
 Constants.LEAN_MAX_ANGLE = 8                  -- degrees the torso tips toward the movement direction at full input
 Constants.LEAN_RATE = 10                      -- exp-decay rate of the lean toward its target (server Heartbeat)
 
