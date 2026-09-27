@@ -9,7 +9,6 @@ local MinimapController = {}
 
 local localPlayer = Players.LocalPlayer
 local frame: Frame
-local cone: ImageLabel?
 local currentPhase = Constants.PHASE_LOBBY
 
 local dots: { [Model]: Frame } = {}
@@ -110,22 +109,8 @@ local function clearDots()
 	end
 end
 
--- The map turns so the camera faces up, so the cone always points up; only
--- its apex angle tracks the camera's horizontal field of view (vertical FOV
--- widened by the viewport aspect), which sprint and aim change.
-local function updateCone()
-	local camera = Workspace.CurrentCamera
-	if not cone or not camera then return end
-	local viewport = camera.ViewportSize
-	local aspect = if viewport.Y > 0 then viewport.X / viewport.Y else 1
-	local halfTan = math.tan(math.rad(camera.FieldOfView / 2)) * aspect
-	local height = cone.Size.Y.Scale
-	cone.Size = UDim2.fromScale(2 * height * halfTan, height)
-end
-
 local function update()
 	if not frame.Visible then return end
-	updateCone()
 	local center = localRoot()
 	if not center then
 		clearDots()
@@ -168,11 +153,6 @@ function MinimapController.init()
 	local gameGui = playerGui:WaitForChild("Game") :: ScreenGui
 	frame = gameGui:WaitForChild("Minimap") :: Frame
 	frame.Visible = false
-	cone = frame:FindFirstChild("FovCone") :: ImageLabel?
-	if cone then
-		cone.ImageColor3 = Constants.MINIMAP_CONE_COLOR
-		cone.ImageTransparency = Constants.MINIMAP_CONE_TRANSPARENCY
-	end
 
 	local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 	local RoundStateRemote = Remotes:WaitForChild("RoundStateChanged") :: RemoteEvent
