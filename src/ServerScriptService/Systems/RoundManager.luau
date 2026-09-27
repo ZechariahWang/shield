@@ -370,6 +370,13 @@ local function onCharacterAdded(player: Player, char: Model)
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	if hum then
 		hum.BreakJointsOnDeath = false
+		-- A reset mid-round counts as an elimination with no killer; the respawn then
+		-- lands in the lobby because the state is already Lobby.
+		hum.Died:Connect(function()
+			if currentPhase ~= Constants.PHASE_ROUND then return end
+			if PlayerState.get(player) ~= Constants.STATE_SAFE then return end
+			onPlayerEliminated(char, nil)
+		end)
 	end
 	CombatSystem.prepareHitbox(char)
 
