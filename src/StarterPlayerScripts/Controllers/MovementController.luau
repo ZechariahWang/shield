@@ -246,6 +246,15 @@ local function bindCharacter(char: Model)
 	end)
 end
 
+-- Touch stand-ins for holding Shift and right click.
+function MovementController.setSprintHeld(on: boolean)
+	shiftHeld = on
+end
+
+function MovementController.setAimHeld(on: boolean)
+	aimHeld = on
+end
+
 function MovementController.isSprinting(): boolean
 	return sprinting
 end
