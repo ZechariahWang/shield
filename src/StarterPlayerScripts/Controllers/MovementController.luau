@@ -1,3 +1,4 @@
+local ContentProvider = game:GetService("ContentProvider")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -40,29 +41,53 @@ local function getHumanoid(): Humanoid?
 	return char:FindFirstChildOfClass("Humanoid")
 end
 
-local function loadTrack(animator: Animator, id: string, priority: Enum.AnimationPriority, looped: boolean): AnimationTrack
+local function makeAnimation(id: string): Animation
 	local animation = Instance.new("Animation")
 	animation.AnimationId = id
+	return animation
+end
+
+local function loadTrack(animator: Animator, animation: Animation, priority: Enum.AnimationPriority, looped: boolean): AnimationTrack
 	local track = animator:LoadAnimation(animation)
 	track.Priority = priority
 	track.Looped = looped
 	return track
 end
 
+-- The clips are preloaded before any track is created: a track takes the asset's
+-- authored priority and loop flag when its data arrives, which on a live client
+-- is after LoadAnimation returns and would overwrite what is set here.
 local function bindAnimations(hum: Humanoid)
 	local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 5)
 	if not animator or not animator:IsA("Animator") then return end
-	moveTracks = {}
+
+	local moveAnimations: { [string]: Animation } = {}
+	local dashAnimations: { [string]: Animation } = {}
+	local toPreload: { Instance } = {}
 	for name, id in Constants.MOVEMENT_ANIMATIONS do
-		local track = loadTrack(animator, id, Enum.AnimationPriority.Movement, true)
+		moveAnimations[name] = makeAnimation(id)
+		table.insert(toPreload, moveAnimations[name])
+	end
+	for name, id in Constants.DASH_ANIMATIONS do
+		dashAnimations[name] = makeAnimation(id)
+		table.insert(toPreload, dashAnimations[name])
+	end
+	local jumpAnimation = makeAnimation(Constants.JUMP_ANIMATION)
+	table.insert(toPreload, jumpAnimation)
+	ContentProvider:PreloadAsync(toPreload)
+	if hum.Parent ~= localPlayer.Character then return end
+
+	moveTracks = {}
+	for name, animation in moveAnimations do
+		local track = loadTrack(animator, animation, Enum.AnimationPriority.Movement, true)
 		track:Play(0, WEIGHT_EPSILON)
 		moveTracks[name] = track
 	end
 	dashTracks = {}
-	for name, id in Constants.DASH_ANIMATIONS do
-		dashTracks[name] = loadTrack(animator, id, Enum.AnimationPriority.Action, false)
+	for name, animation in dashAnimations do
+		dashTracks[name] = loadTrack(animator, animation, Enum.AnimationPriority.Action, false)
 	end
-	jumpTrack = loadTrack(animator, Constants.JUMP_ANIMATION, Enum.AnimationPriority.Action, false)
+	jumpTrack = loadTrack(animator, jumpAnimation, Enum.AnimationPriority.Action, false)
 end
 
 -- Root-space move direction: -Z forward, +X right.
@@ -196,7 +221,7 @@ local function bindCharacter(char: Model)
 	if not hum or not hum:IsA("Humanoid") then return end
 	canDoubleJump = false
 	doubleJumped = false
-	bindAnimations(hum)
+	task.spawn(bindAnimations, hum) -- preloading yields; the state wiring below must not wait on it
 	hum.StateChanged:Connect(function(_old, new)
 		if new == Enum.HumanoidStateType.Landed then
 			canDoubleJump = false
