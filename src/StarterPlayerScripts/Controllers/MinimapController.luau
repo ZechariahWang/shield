@@ -10,6 +10,7 @@ local MinimapController = {}
 local localPlayer = Players.LocalPlayer
 local frame: Frame
 local currentPhase = Constants.PHASE_LOBBY
+local localState = Constants.STATE_LOBBY
 
 local dots: { [Model]: Frame } = {}
 local shotFlashUntil: { [Model]: number } = {}
@@ -141,7 +142,8 @@ local function update()
 end
 
 local function reconcileVisibility()
-	local show = currentPhase == Constants.PHASE_REVEAL or currentPhase == Constants.PHASE_ROUND
+	local inArena = currentPhase == Constants.PHASE_REVEAL or currentPhase == Constants.PHASE_ROUND
+	local show = inArena and localState == Constants.STATE_SAFE
 	frame.Visible = show
 	if not show then
 		clearDots()
@@ -158,6 +160,12 @@ function MinimapController.init()
 	local RoundStateRemote = Remotes:WaitForChild("RoundStateChanged") :: RemoteEvent
 	RoundStateRemote.OnClientEvent:Connect(function(phase: string)
 		currentPhase = phase
+		reconcileVisibility()
+	end)
+	local PlayerStateRemote = Remotes:WaitForChild("PlayerStateChanged") :: RemoteEvent
+	PlayerStateRemote.OnClientEvent:Connect(function(player: Player, state: string)
+		if player ~= localPlayer then return end
+		localState = state
 		reconcileVisibility()
 	end)
 

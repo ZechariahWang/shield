@@ -542,7 +542,7 @@ local function setModalOpen(modal: Modal, open: boolean)
 	tween:Play()
 end
 
-local function closeAll()
+function ShopController.closeAll()
 	for _, modal in modals do
 		setModalOpen(modal, false)
 	end
@@ -563,7 +563,7 @@ local function reconcileLobbyUI()
 	local inLobby = localState == Constants.STATE_LOBBY
 	lobbyButtons.Visible = inLobby
 	if not inLobby then
-		closeAll()
+		ShopController.closeAll()
 	end
 end
 

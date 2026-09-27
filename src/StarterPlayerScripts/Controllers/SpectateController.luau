@@ -14,8 +14,9 @@ local ShopController = require(script.Parent.ShopController)
 local SpectateController = {}
 
 local localPlayer = Players.LocalPlayer
-local button: TextButton
+local lobbyButtons: GuiObject
 local bar: Frame
+local localState = Constants.STATE_LOBBY
 local targetLabel: TextLabel
 local target: Instance?
 local loop: RBXScriptConnection?
@@ -74,7 +75,7 @@ local function stop()
 	end
 	target = nil
 	bar.Visible = false
-	button.Text = "SPECTATE"
+	lobbyButtons.Visible = localState == Constants.STATE_LOBBY
 	local camera = Workspace.CurrentCamera
 	local character = localPlayer.Character
 	local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
@@ -87,8 +88,9 @@ end
 local function start()
 	target = neighbor(1)
 	if not target then return end
+	ShopController.closeAll()
+	lobbyButtons.Visible = false
 	bar.Visible = true
-	button.Text = "STOP"
 	-- Re-asserted every frame: a kill cam ending in the meantime hands the camera back to the local humanoid.
 	loop = RunService.RenderStepped:Connect(function()
 		if not isValid(target) then
@@ -115,28 +117,35 @@ end
 function SpectateController.init()
 	local playerGui = localPlayer:WaitForChild("PlayerGui")
 	local lobbyGui = playerGui:WaitForChild("Lobby") :: ScreenGui
-	button = lobbyGui:WaitForChild("Buttons"):WaitForChild("SpectateButton") :: TextButton
+	lobbyButtons = lobbyGui:WaitForChild("Buttons") :: GuiObject
+	local button = lobbyButtons:WaitForChild("SpectateButton") :: TextButton
 	bar = lobbyGui:WaitForChild("Spectate") :: Frame
-	targetLabel = bar:WaitForChild("Target") :: TextLabel
+	local row = bar:WaitForChild("Row")
+	targetLabel = row:WaitForChild("Target") :: TextLabel
 	bar.Visible = false
 	local PlayerStateRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("PlayerStateChanged") :: RemoteEvent
 
 	ShopController.bindLobbyButton(button, function()
-		if loop then
-			stop()
-		else
+		if not loop then
 			start()
 		end
 	end)
-	ShopController.bindLobbyButton(bar:WaitForChild("Prev") :: TextButton, function()
+	ShopController.bindLobbyButton(bar:WaitForChild("Exit") :: TextButton, function()
+		if loop then
+			stop()
+		end
+	end)
+	ShopController.bindLobbyButton(row:WaitForChild("Prev") :: TextButton, function()
 		target = neighbor(-1) or target
 	end)
-	ShopController.bindLobbyButton(bar:WaitForChild("Next") :: TextButton, function()
+	ShopController.bindLobbyButton(row:WaitForChild("Next") :: TextButton, function()
 		target = neighbor(1) or target
 	end)
 
 	PlayerStateRemote.OnClientEvent:Connect(function(player: Player, state: string)
-		if player == localPlayer and state ~= Constants.STATE_LOBBY and loop then
+		if player ~= localPlayer then return end
+		localState = state
+		if state ~= Constants.STATE_LOBBY and loop then
 			stop()
 		end
 	end)
