@@ -143,6 +143,8 @@ Constants.MINIMAP_ENEMY_COLOR = Constants.TAGGER_COLOR
 Constants.MINIMAP_SHIELD_COLOR = Constants.SHIELD_COLOR
 Constants.MINIMAP_SHOOTING_COLOR = Color3.fromRGB(255, 220, 60)
 Constants.MINIMAP_SELF_COLOR = Constants.WHITE
+Constants.MINIMAP_CONE_COLOR = Constants.WHITE          -- the camera's field of view, drawn up from the center dot
+Constants.MINIMAP_CONE_TRANSPARENCY = 0.85
 
 -- SHIELD STATUS (ShieldChanged remote payload)
 Constants.SHIELD_UP = "Up"
