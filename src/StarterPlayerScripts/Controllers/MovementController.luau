@@ -130,6 +130,11 @@ local function stepAnimations()
 	local walkPlayback = math.max(horizontalSpeed / Constants.MOVEMENT_ANIM_REFERENCE_SPEED, 0.1)
 	local runPlayback = math.max(horizontalSpeed / Constants.MOVEMENT_RUN_REFERENCE_SPEED, 0.1)
 	for name, track in moveTracks do
+		-- Applying the character's appearance after a respawn stops every track on
+		-- the Animator; the stock Animate script re-plays on state events, we re-play here.
+		if not track.IsPlaying then
+			track:Play(0, WEIGHT_EPSILON)
+		end
 		track:AdjustWeight(math.max(weights[name] or 0, WEIGHT_EPSILON), Constants.MOVEMENT_ANIM_FADE)
 		local playback = walkPlayback
 		if name == "Idle" then

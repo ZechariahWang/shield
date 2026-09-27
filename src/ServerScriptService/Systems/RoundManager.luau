@@ -370,12 +370,24 @@ local function onCharacterAdded(player: Player, char: Model)
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	if hum then
 		hum.BreakJointsOnDeath = false
-		-- A reset mid-round counts as an elimination with no killer; the respawn then
-		-- lands in the lobby because the state is already Lobby.
+		-- Dying while Safe in the arena sends the player back to the lobby at once: a
+		-- Round death is an elimination with no killer (kill feed, ragdoll), a Reveal
+		-- death is just the trip back. The dead body would otherwise lie stiff in the
+		-- arena until the respawn timer, so the character is reloaded immediately.
 		hum.Died:Connect(function()
-			if currentPhase ~= Constants.PHASE_ROUND then return end
 			if PlayerState.get(player) ~= Constants.STATE_SAFE then return end
-			onPlayerEliminated(char, nil)
+			if currentPhase == Constants.PHASE_ROUND then
+				onPlayerEliminated(char, nil)
+			elseif currentPhase == Constants.PHASE_REVEAL then
+				setLobby(player)
+			else
+				return
+			end
+			task.defer(function()
+				if player.Parent and player.Character == char then
+					player:LoadCharacter()
+				end
+			end)
 		end)
 	end
 	CombatSystem.prepareHitbox(char)
