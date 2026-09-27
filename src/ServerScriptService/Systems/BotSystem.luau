@@ -193,6 +193,22 @@ function BotSystem.isBot(char: Model): boolean
 	return bots[char] == true
 end
 
+-- How many bots a round fields; 0 when disabled.
+function BotSystem.plannedCount(): number
+	if not Constants.BOTS_ENABLED then return 0 end
+	return Constants.BOT_COUNT
+end
+
+-- Bots still standing in the current round, by model name.
+function BotSystem.aliveNames(): { string }
+	local names: { string } = {}
+	for char in bots do
+		table.insert(names, char.Name)
+	end
+	table.sort(names)
+	return names
+end
+
 function BotSystem.remove(char: Model)
 	bots[char] = nil
 	CombatSystem.unregisterBot(char)
@@ -201,13 +217,14 @@ end
 
 -- Clone the rigs onto spawn points. Called at Reveal so bots are visible during positioning.
 function BotSystem.spawn()
+	if BotSystem.plannedCount() == 0 then return end
 	local rig = findRig()
 	if not rig then
 		warn("BotSystem: rig not found at ReplicatedStorage." .. table.concat(Constants.BOT_RIG_PATH, "."))
 		return
 	end
 	local folder = getFolder()
-	for i = 1, Constants.BOT_COUNT do
+	for i = 1, BotSystem.plannedCount() do
 		local cframe = MapManager.randomSpawnCFrame()
 		if not cframe then break end
 		local char = rig:Clone()
@@ -253,7 +270,7 @@ end
 
 function BotSystem.init()
 	BotSystem.stop()
-	if Constants.BOT_COUNT > 0 and not findRig() then
+	if BotSystem.plannedCount() > 0 and not findRig() then
 		warn("BotSystem: rig not found at ReplicatedStorage." .. table.concat(Constants.BOT_RIG_PATH, ".") .. ": no bots will spawn")
 	end
 end

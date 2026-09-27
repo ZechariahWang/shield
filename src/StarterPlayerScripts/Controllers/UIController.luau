@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 
@@ -80,10 +81,23 @@ local function buildMainText(): string
 	return ""
 end
 
+-- Bots count as players: the ones planned for the round before it starts, the ones
+-- still standing (models under Workspace.Bots) during it.
+local function plannedBots(): number
+	if not Constants.BOTS_ENABLED then return 0 end
+	return Constants.BOT_COUNT
+end
+
+local function aliveBots(): number
+	local folder = Workspace:FindFirstChild("Bots")
+	if not folder then return 0 end
+	return #folder:GetChildren()
+end
+
 -- Returns (left, right). Right is only used during Round (the alive count).
 local function buildSecondaryText(): (string, string)
 	if currentPhase == Constants.PHASE_LOBBY then
-		local lobbyCount = countByState(Constants.STATE_LOBBY)
+		local lobbyCount = countByState(Constants.STATE_LOBBY) + plannedBots()
 		return colorize(CREAM, string.format("PLAYERS %d/%d", lobbyCount, Constants.MIN_PLAYERS)), ""
 	elseif currentPhase == Constants.PHASE_INTERMISSION then
 		if phaseEndTime > 0 then
@@ -105,8 +119,8 @@ local function buildSecondaryText(): (string, string)
 			local color = if remaining <= 30 then RED else CREAM
 			left = colorize(color, formatTime(remaining))
 		end
-		local safeCount = countByState(Constants.STATE_SAFE)
-		local totalCount = safeCount + countByState(Constants.STATE_LOBBY)
+		local safeCount = countByState(Constants.STATE_SAFE) + aliveBots()
+		local totalCount = countByState(Constants.STATE_SAFE) + countByState(Constants.STATE_LOBBY) + plannedBots()
 		return left, colorize(CREAM, string.format("ALIVE %d/%d", safeCount, totalCount))
 	end
 	return "", ""

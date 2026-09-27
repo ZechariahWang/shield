@@ -11,11 +11,13 @@ Constants.END_TIME = 5
 -- TEST MODE (solo playtesting). Rounds start with one player, the timer and
 -- last-standing checks are off, and the round ends when a Safe player touches
 -- a part named TEST_END_WALL in the loaded map (or when no real player is Safe).
-Constants.TEST_MODE = true
+Constants.TEST_MODE = false
 Constants.TEST_END_WALL = "ShortWall"
 
--- BOTS (server-driven combatants cloned from ReplicatedStorage.Assets.Rigs.NPC)
-Constants.BOT_COUNT = 3                   -- spawned at Reveal, removed at round end; 0 disables
+-- BOTS (server-driven combatants cloned from ReplicatedStorage.Assets.Rigs.NPC).
+-- They count as players: toward MIN_PLAYERS, the alive count and the last-standing win.
+Constants.BOTS_ENABLED = true
+Constants.BOT_COUNT = 3                   -- spawned at Reveal while BOTS_ENABLED, removed at round end
 Constants.BOT_RIG_PATH = { "Assets", "Rigs", "NPC" }
 Constants.BOT_SHOOT_INTERVAL = { 2, 5 }    -- seconds between shots, uniform random
 Constants.BOT_SHIELD_INTERVAL = { 4, 10 }  -- seconds between shield raises, uniform random

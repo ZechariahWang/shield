@@ -156,12 +156,20 @@ local function healAllPlayers()
 	end
 end
 
+-- Everyone still standing: Safe players and alive bots (bots count as players).
 local function survivorNames(): { string }
 	local names: { string } = {}
 	for _, p in PlayerState.getAllInState(Constants.STATE_SAFE) do
 		table.insert(names, p.Name)
 	end
+	for _, name in BotSystem.aliveNames() do
+		table.insert(names, name)
+	end
 	return names
+end
+
+local function aliveCount(): number
+	return PlayerState.countInState(Constants.STATE_SAFE) + #BotSystem.aliveNames()
 end
 
 local function endRound(reason: string, winners: { string })
@@ -250,7 +258,7 @@ local function runRound()
 		end
 	end
 
-	if #participants < minPlayers then
+	if #participants + BotSystem.plannedCount() < minPlayers then
 		for _, player in participants do
 			setLobby(player)
 			MapManager.teleportToLobby(player)
@@ -266,7 +274,7 @@ local function runRound()
 	broadcastPhase(Constants.PHASE_REVEAL, Constants.REVEAL_TIME, nil)
 	task.wait(Constants.REVEAL_TIME)
 
-	if PlayerState.countInState(Constants.STATE_SAFE) < minPlayers then
+	if aliveCount() < minPlayers then
 		endRound(Constants.REASON_ABORTED, {})
 		return
 	end
@@ -288,7 +296,7 @@ local function runRound()
 	while Constants.TEST_MODE or os.clock() < roundEnd do
 		task.wait(0.25)
 
-		if #Players:GetPlayers() < minPlayers then
+		if #Players:GetPlayers() + BotSystem.plannedCount() < minPlayers then
 			endRound(Constants.REASON_ABORTED, {})
 			return
 		end
@@ -298,7 +306,7 @@ local function runRound()
 				endRound(Constants.REASON_SURVIVED, survivorNames())
 				return
 			end
-		elseif PlayerState.countInState(Constants.STATE_SAFE) <= 1 then
+		elseif aliveCount() <= 1 then
 			endRound(Constants.REASON_LAST_STANDING, survivorNames())
 			return
 		end
@@ -312,7 +320,7 @@ local function gameLoop()
 	while true do
 		broadcastPhase(Constants.PHASE_LOBBY)
 
-		while PlayerState.countInState(Constants.STATE_LOBBY) < minPlayers do
+		while PlayerState.countInState(Constants.STATE_LOBBY) + BotSystem.plannedCount() < minPlayers do
 			task.wait(1)
 		end
 
@@ -326,7 +334,7 @@ local function gameLoop()
 		broadcastPhase(Constants.PHASE_INTERMISSION, Constants.INTERMISSION_TIME)
 		task.wait(Constants.INTERMISSION_TIME)
 
-		if PlayerState.countInState(Constants.STATE_LOBBY) < minPlayers then
+		if PlayerState.countInState(Constants.STATE_LOBBY) + BotSystem.plannedCount() < minPlayers then
 			MapManager.unloadMap()
 			continue
 		end
@@ -370,18 +378,17 @@ local function onCharacterAdded(player: Player, char: Model)
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	if hum then
 		hum.BreakJointsOnDeath = false
-		-- Dying while Safe in the arena sends the player back to the lobby at once: a
-		-- Round death is an elimination with no killer (kill feed, ragdoll), a Reveal
-		-- death is just the trip back. The dead body would otherwise lie stiff in the
-		-- arena until the respawn timer, so the character is reloaded immediately.
+		-- Every death reloads the character at once instead of leaving the body lying
+		-- stiff until the respawn timer. Dying while Safe in the arena also sends the
+		-- player back to the lobby: a Round death is an elimination with no killer
+		-- (kill feed, ragdoll), a Reveal death is just the trip back.
 		hum.Died:Connect(function()
-			if PlayerState.get(player) ~= Constants.STATE_SAFE then return end
-			if currentPhase == Constants.PHASE_ROUND then
-				onPlayerEliminated(char, nil)
-			elseif currentPhase == Constants.PHASE_REVEAL then
-				setLobby(player)
-			else
-				return
+			if PlayerState.get(player) == Constants.STATE_SAFE then
+				if currentPhase == Constants.PHASE_ROUND then
+					onPlayerEliminated(char, nil)
+				elseif currentPhase == Constants.PHASE_REVEAL then
+					setLobby(player)
+				end
 			end
 			task.defer(function()
 				if player.Parent and player.Character == char then
