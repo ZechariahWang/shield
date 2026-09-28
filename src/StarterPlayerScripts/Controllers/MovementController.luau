@@ -7,6 +7,7 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
+local MovementBlend = require(ReplicatedStorage.Shared.MovementBlend)
 local CombatController = require(script.Parent.CombatController)
 local SettingsController = require(script.Parent.SettingsController)
 
@@ -101,35 +102,13 @@ end
 local function stepAnimations()
 	local hum = getHumanoid()
 	if not hum or not moveTracks.Idle then return end
-	local weights = { Idle = 0, Forward = 0, Backward = 0, Left = 0, Right = 0, Run = 0 }
 	local move = localMove(hum)
-	local grounded = hum.FloorMaterial ~= Enum.Material.Air
-	if grounded and move then
-		local amount = math.min(hum.MoveDirection.Magnitude, 1)
-		weights.Forward = math.max(-move.Z, 0)
-		weights.Backward = math.max(move.Z, 0)
-		weights.Left = math.max(-move.X, 0)
-		weights.Right = math.max(move.X, 0)
-		local total = weights.Forward + weights.Backward + weights.Left + weights.Right
-		if total > 0 then
-			local scale = amount / total
-			weights.Forward *= scale
-			weights.Backward *= scale
-			weights.Left *= scale
-			weights.Right *= scale
-		end
-		if sprinting then
-			weights.Run = weights.Forward
-			weights.Forward = 0
-		end
-		weights.Idle = 1 - amount
-	end
+	local grounded = move ~= nil and hum.FloorMaterial ~= Enum.Material.Air
+	local weights = MovementBlend.weights(move or Vector3.zero, hum.MoveDirection.Magnitude, grounded, sprinting)
 
 	local root = hum.RootPart
 	local velocity = if root then root.AssemblyLinearVelocity else Vector3.zero
 	local horizontalSpeed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
-	local walkPlayback = math.max(horizontalSpeed / Constants.MOVEMENT_ANIM_REFERENCE_SPEED, 0.1)
-	local runPlayback = math.max(horizontalSpeed / Constants.MOVEMENT_RUN_REFERENCE_SPEED, 0.1)
 	for name, track in moveTracks do
 		-- Applying the character's appearance after a respawn stops every track on
 		-- the Animator; the stock Animate script re-plays on state events, we re-play here.
@@ -137,13 +116,7 @@ local function stepAnimations()
 			track:Play(0, WEIGHT_EPSILON)
 		end
 		track:AdjustWeight(math.max(weights[name] or 0, WEIGHT_EPSILON), Constants.MOVEMENT_ANIM_FADE)
-		local playback = walkPlayback
-		if name == "Idle" then
-			playback = 1
-		elseif name == "Run" then
-			playback = runPlayback
-		end
-		track:AdjustSpeed(playback)
+		track:AdjustSpeed(MovementBlend.playback(name, horizontalSpeed))
 	end
 end
 
