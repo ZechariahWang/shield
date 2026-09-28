@@ -11,6 +11,7 @@ local MapManager = require(script.Parent.MapManager)
 local BotSystem = require(script.Parent.BotSystem)
 local RagdollSystem = require(script.Parent.RagdollSystem)
 local Store = require(script.Parent.Store)
+local WeaponModel = require(script.Parent.WeaponModel)
 
 local RoundManager = {}
 
@@ -45,92 +46,16 @@ local function setWalkSpeed(player: Player, speed: number)
 	if hum then hum.WalkSpeed = speed end
 end
 
--- Read the grip CFrame and motor name from the third-person rig's Right-Arm motor.
--- This lets the user author the grip in Studio (via the rig's pre-rigged weapon)
--- and have it pick up automatically. Without a rig, falls back to the item
--- module's `grip` (identity if absent) + "Weapon".
-local function extractTPGrip(weaponName: string): (CFrame, string)
-	local data = Catalog.get(Catalog.KIND_WEAPONS, weaponName)
-	local fallbackGrip = (data and data.grip) or CFrame.new()
-	local rigsFolder = ReplicatedStorage:FindFirstChild("ThirdPersonRigs")
-	if not rigsFolder then return fallbackGrip, "Weapon" end
-	local rig = rigsFolder:FindFirstChild(weaponName)
-	if not rig or not rig:IsA("Model") then return fallbackGrip, "Weapon" end
-	local rightArm = rig:FindFirstChild("Right Arm")
-	if not rightArm then return fallbackGrip, "Weapon" end
-	for _, m in ipairs(rig:GetDescendants()) do
-		if m:IsA("Motor6D") and m.Part0 == rightArm and m.Part1 then
-			return m.C0, m.Name
-		end
-	end
-	return fallbackGrip, "Weapon"
-end
-
--- Attach / detach the third-person weapon model on the player's character.
--- Server-side so the welded weapon replicates to every observer. The animation
--- system targets the Motor6D by name (extracted from ThirdPersonRigs.<Name>),
--- so the weapon follows the player's right arm via the TP fire/idle animations.
+-- The third-person weapon follows the equipped choice; WeaponModel does the welding.
 local function applyTPWeapon(player: Player, on: boolean)
 	local char = player.Character
 	if not char then return end
-
-	local existing = char:FindFirstChild("EquippedWeapon")
-	if existing then existing:Destroy() end
-	local rightArm = char:FindFirstChild("Right Arm")
-	if rightArm then
-		for _, c in ipairs(rightArm:GetChildren()) do
-			if c:IsA("Motor6D") and c.Part1 == nil then
-				c:Destroy()
-			end
-		end
-	end
-
-	if not on then return end
-	if not rightArm then return end
-
-	local weaponName = Store.equipped(player, Catalog.KIND_WEAPONS) or Constants.VIEWMODEL_DEFAULT_WEAPON
-	local template = Catalog.model(Catalog.KIND_WEAPONS, weaponName)
-	if not template then return end
-
-	local clone = template:Clone()
-	clone.Name = "EquippedWeapon"
-	local primary: BasePart? = clone.PrimaryPart or clone:FindFirstChildWhichIsA("BasePart")
-	if not primary then
-		clone:Destroy()
+	if not on then
+		WeaponModel.detach(char)
 		return
 	end
-	clone.PrimaryPart = primary
-
-	-- Weld every part to the primary with its authored offset so models built from
-	-- loose parts hold together. An explicit C0 avoids WeldConstraint capturing the
-	-- offset after the Motor6D has already snapped the primary to the arm.
-	for _, d in ipairs(clone:GetDescendants()) do
-		if d:IsA("BasePart") then
-			d.Anchored = false
-			d.CanCollide = false
-			d.CanQuery = false
-			d.CanTouch = false
-			d.Massless = true
-			if d ~= primary then
-				local weld = Instance.new("Weld")
-				weld.Part0 = primary
-				weld.Part1 = d
-				weld.C0 = primary.CFrame:ToObjectSpace(d.CFrame)
-				weld.Parent = d
-			end
-		end
-	end
-
-	local grip, motorName = extractTPGrip(weaponName)
-
-	local motor = Instance.new("Motor6D")
-	motor.Name = motorName
-	motor.Part0 = rightArm
-	motor.Part1 = primary
-	motor.C0 = grip
-	motor.Parent = rightArm
-
-	clone.Parent = char
+	local weaponName = Store.equipped(player, Catalog.KIND_WEAPONS) or Constants.VIEWMODEL_DEFAULT_WEAPON
+	WeaponModel.attach(char, weaponName)
 end
 
 local function setSafe(player: Player)
