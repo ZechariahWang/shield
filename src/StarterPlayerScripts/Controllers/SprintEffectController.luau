@@ -5,8 +5,8 @@ local RunService = game:GetService("RunService")
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local MovementController = require(script.Parent.MovementController)
 
--- Purely cosmetic sprint speed lines: thin streaks around the screen edge,
--- pointing at the center, that fade in while the local character is sprinting
+-- Purely cosmetic sprint speed lines: thin streaks hanging off the screen
+-- border, pointing at the center, that fade in while the local character is sprinting
 -- and actually moving at sprint speed, and flicker by respawning at new angles.
 -- Built in code inside the Game ScreenGui; nothing here touches gameplay.
 local SprintEffectController = {}
@@ -19,12 +19,13 @@ local streaks: { Streak } = {}
 local intensity = 0
 
 local function respawn(streak: Streak)
-	local size = container.AbsoluteSize
-	local half = math.min(size.X, size.Y) / 2
+	local half = container.AbsoluteSize / 2
 	local angle = math.random() * 2 * math.pi
-	local length = half * (Constants.SPEED_LINE_MIN_LENGTH + math.random() * (Constants.SPEED_LINE_MAX_LENGTH - Constants.SPEED_LINE_MIN_LENGTH))
-	local inner = half * Constants.SPEED_LINE_INNER_RADIUS * (0.8 + math.random() * 0.4)
-	local center = size / 2 + Vector2.new(math.cos(angle), math.sin(angle)) * (inner + length / 2)
+	local dir = Vector2.new(math.cos(angle), math.sin(angle))
+	-- Distance from the center to the screen border along this angle: the streak's bright end sits right on it.
+	local edge = math.min(half.X / math.max(math.abs(dir.X), 0.001), half.Y / math.max(math.abs(dir.Y), 0.001))
+	local length = edge * (Constants.SPEED_LINE_MIN_LENGTH + math.random() * (Constants.SPEED_LINE_MAX_LENGTH - Constants.SPEED_LINE_MIN_LENGTH))
+	local center = half + dir * (edge - length / 2)
 	local frame = streak.frame
 	frame.Size = UDim2.fromOffset(length, Constants.SPEED_LINE_THICKNESS)
 	frame.Position = UDim2.fromOffset(center.X, center.Y)
