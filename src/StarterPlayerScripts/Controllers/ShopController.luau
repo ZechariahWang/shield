@@ -15,6 +15,8 @@ local TWEEN_INFO = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirecti
 local IDLE_SCALE = 1
 local HOVER_SCALE = 1.05
 local PRESS_SCALE = 0.95
+local HOVER_WIDTH = 1.08   -- lobby list buttons grow their right edge instead of scaling
+local PRESS_WIDTH = 1.04
 local IDLE_TRANSPARENCY = 0.25
 local HOVER_TRANSPARENCY = 0.05
 
@@ -107,19 +109,31 @@ local ShopEquipRemote: RemoteEvent
 
 local refreshAll: () -> ()
 
+-- A button with an aspect constraint (the spectate row) scales as a whole; a
+-- lobby list button keeps its height and left edge and grows to the right.
 function ShopController.bindLobbyButton(button: TextButton, onClick: () -> ())
 	local scale = button:WaitForChild("UIScale") :: UIScale
+	local scalesWhole = button:FindFirstChildOfClass("UIAspectRatioConstraint") ~= nil
+	local baseSize = button.Size
 	local hovering = false
 	local pressing = false
 	local function refresh()
 		local targetScale = IDLE_SCALE
+		local targetWidth = 1
 		if pressing then
 			targetScale = PRESS_SCALE
+			targetWidth = PRESS_WIDTH
 		elseif hovering then
 			targetScale = HOVER_SCALE
+			targetWidth = HOVER_WIDTH
 		end
 		local targetTransparency = if hovering or pressing then HOVER_TRANSPARENCY else IDLE_TRANSPARENCY
-		TweenService:Create(scale, TWEEN_INFO, { Scale = targetScale }):Play()
+		if scalesWhole then
+			TweenService:Create(scale, TWEEN_INFO, { Scale = targetScale }):Play()
+		else
+			local size = UDim2.new(baseSize.X.Scale * targetWidth, baseSize.X.Offset, baseSize.Y.Scale, baseSize.Y.Offset)
+			TweenService:Create(button, TWEEN_INFO, { Size = size }):Play()
+		end
 		TweenService:Create(button, TWEEN_INFO, { BackgroundTransparency = targetTransparency }):Play()
 	end
 	button.MouseEnter:Connect(function()
