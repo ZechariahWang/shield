@@ -52,6 +52,16 @@ function Settings.keyNameOf(input: InputObject): string?
 	return nil
 end
 
+-- A typed or stepped sensitivity: rounded to a SENSITIVITY_STEP and clamped, or nil when it is not a number.
+function Settings.parseSensitivity(raw: string | number): number?
+	local value = tonumber(raw)
+	if value == nil or value ~= value then return nil end
+	-- Divide rather than multiply back so 1.3 comes out as the literal 1.3, not 1.3000000000000003.
+	local steps = math.round(value / Constants.SENSITIVITY_STEP)
+	value = steps / (1 / Constants.SENSITIVITY_STEP)
+	return math.clamp(value, Constants.SENSITIVITY_MIN, Constants.SENSITIVITY_MAX)
+end
+
 function Settings.merge(raw: any): Record
 	local record: Record = { sensitivity = Constants.SENSITIVITY_DEFAULT, keybinds = {} }
 	for action, key in Constants.DEFAULT_KEYBINDS do

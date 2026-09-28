@@ -36,6 +36,15 @@ return function()
 	assert(Settings.merge({ sensitivity = "fast" }).sensitivity == Constants.SENSITIVITY_DEFAULT, "garbage sensitivity")
 	assert(Settings.merge("junk").sensitivity == Constants.SENSITIVITY_DEFAULT, "garbage record")
 
+	-- Typed sensitivity: parsed, rounded to a step, clamped; garbage is nil.
+	assert(Settings.parseSensitivity("2.5") == 2.5, "typed number")
+	assert(Settings.parseSensitivity(" 1.26 ") == 1.3, "typed rounds to a step")
+	assert(Settings.parseSensitivity("100") == Constants.SENSITIVITY_MAX, "typed clamped high")
+	assert(Settings.parseSensitivity("-3") == Constants.SENSITIVITY_MIN, "typed clamped low")
+	assert(Settings.parseSensitivity("fast") == nil, "typed garbage")
+	assert(Settings.parseSensitivity("") == nil, "typed empty")
+	assert(Settings.parseSensitivity("nan") == nil, "typed nan")
+
 	-- Display names.
 	assert(Settings.displayName("MouseButton1") == "LMB", "lmb")
 	assert(Settings.displayName("MouseButton2") == "RMB", "rmb")
