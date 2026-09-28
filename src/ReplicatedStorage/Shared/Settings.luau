@@ -16,7 +16,7 @@ export type Record = {
 local MOUSE_BUTTONS = { MouseButton1 = "LMB", MouseButton2 = "RMB", MouseButton3 = "MMB" }
 local RESERVED = { Escape = true, Unknown = true }
 
-Settings.ACTIONS = { "Shoot", "Shield", "Dash", "Sprint", "Aim" }
+Settings.ACTIONS = { "Shoot", "Shield", "Dash", "Sprint", "Aim", "Slide" }
 
 function Settings.isKeyName(name: any): boolean
 	if typeof(name) ~= "string" or RESERVED[name] then return false end

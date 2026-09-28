@@ -40,5 +40,12 @@ return function()
 	assert(near(MovementBlend.playback("Run", Constants.MOVEMENT_RUN_REFERENCE_SPEED), 1), "run playback")
 	assert(near(MovementBlend.playback("Left", 0), 0.1), "playback floor")
 
+	-- Dash clip: the dominant axis picks it, a standing dash is a forward one.
+	assert(MovementBlend.dashTrack(Vector3.new(1, 0, 0)) == "Right", "dash right")
+	assert(MovementBlend.dashTrack(Vector3.new(-0.9, 0, -0.4)) == "Left", "dash left dominates")
+	assert(MovementBlend.dashTrack(Vector3.new(0.3, 0, -0.9)) == "Forward", "dash forward")
+	assert(MovementBlend.dashTrack(Vector3.new(0, 0, 1)) == "Backward", "dash backward")
+	assert(MovementBlend.dashTrack(Vector3.zero) == "Forward", "standing dash is forward")
+
 	print("MovementBlendTest: all checks passed")
 end

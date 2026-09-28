@@ -38,6 +38,15 @@ function MovementBlend.weights(localMove: Vector3, amount: number, grounded: boo
 	return weights
 end
 
+-- Which DASH_ANIMATIONS clip a dash in this root-space move direction plays:
+-- sideways when it dominates, else Forward (a standing dash goes forward too).
+function MovementBlend.dashTrack(localMove: Vector3): string
+	if math.abs(localMove.X) > math.abs(localMove.Z) then
+		return if localMove.X > 0 then "Right" else "Left"
+	end
+	return if localMove.Z > 0 then "Backward" else "Forward"
+end
+
 -- Playback speed of a track from the character's horizontal speed.
 function MovementBlend.playback(name: string, horizontalSpeed: number): number
 	if name == "Idle" then return 1 end

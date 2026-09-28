@@ -116,10 +116,16 @@ Constants.MOVEMENT_ANIMATIONS = {             -- blended by MovementController a
 	Right = "rbxassetid://89148728176605",
 	Run = "rbxassetid://100362019423807",       -- takes the forward share of the blend while sprinting
 }
-Constants.DASH_ANIMATIONS = {                 -- one-shot Action priority; a forward or backward dash plays nothing
+Constants.DASH_ANIMATIONS = {                 -- one-shot Action priority, picked by MovementBlend.dashTrack from the move direction
 	Left = "rbxassetid://87274812929516",
 	Right = "rbxassetid://106434084542928",
+	Forward = "rbxassetid://104272845733150",
+	Backward = "rbxassetid://132347250678738",
 }
+Constants.SLIDE_ANIMATION = "rbxassetid://88454254966714" -- one-shot Action priority for the slide, stopped when the slide ends
+Constants.SLIDE_SPEED = 34                    -- studs per second at the start of a slide, easing down to SAFE_WALKSPEED
+Constants.SLIDE_DURATION = 0.7                -- seconds a slide carries the character
+Constants.SLIDE_COOLDOWN = 1.0                -- seconds between slides
 Constants.JUMP_ANIMATION = "rbxassetid://94756604871926"  -- one-shot Action priority on every Jumping state (double jump included)
 Constants.MOVEMENT_ANIM_REFERENCE_SPEED = 16  -- studs per second the walk cycles are authored for; playback speed scales from this
 Constants.MOVEMENT_RUN_REFERENCE_SPEED = 24   -- same for the run cycle (the sprint speed)
@@ -157,6 +163,7 @@ Constants.DEFAULT_KEYBINDS = {           -- Enum.KeyCode names or MouseButton1/2
 	Dash = "E",
 	Sprint = "LeftShift",
 	Aim = "MouseButton2",
+	Slide = "C",
 }
 Constants.SENSITIVITY_DEFAULT = 1        -- UserInputService.MouseDeltaSensitivity: scales the mouse delta the stock camera turns with
 Constants.SENSITIVITY_MIN = 0.1

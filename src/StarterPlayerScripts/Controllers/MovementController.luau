@@ -12,10 +12,13 @@ local CombatController = require(script.Parent.CombatController)
 local SettingsController = require(script.Parent.SettingsController)
 
 -- Client-side movement extras while combat is active: hold Shift to sprint,
--- hold right click to aim (FOV zoom only), and press jump again in the air for
--- a double jump. This controller is the only writer of the camera FOV. The local
--- character is client-simulated, so WalkSpeed is set here and re-applied every
--- frame because the server rewrites it on shield changes.
+-- hold right click to aim (FOV zoom only), press jump again in the air for a
+-- double jump, and press the Slide key while moving on the ground to slide. This
+-- controller is the only writer of the camera FOV. The local character is
+-- client-simulated, so WalkSpeed is set here and re-applied every frame because
+-- the server rewrites it on shield changes, and the slide drives the root's
+-- horizontal velocity through a LinearVelocity constraint (the humanoid re-drives
+-- the velocity every physics step, so a plain write would not hold).
 local MovementController = {}
 
 local localPlayer = Players.LocalPlayer
@@ -28,6 +31,12 @@ local fovTween: Tween? = nil
 
 local canDoubleJump = false
 local doubleJumped = false
+
+local slideTrack: AnimationTrack? = nil
+local slideDirection: Vector3? = nil
+local slideVelocity: LinearVelocity? = nil
+local slideStartedAt = 0
+local lastSlideEndedAt = -math.huge
 
 -- Movement animations: five looping tracks (idle plus four walk directions) at
 -- Movement priority share weights that sum to 1 while grounded, replacing the stock
@@ -76,6 +85,8 @@ local function bindAnimations(hum: Humanoid)
 	end
 	local jumpAnimation = makeAnimation(Constants.JUMP_ANIMATION)
 	table.insert(toPreload, jumpAnimation)
+	local slideAnimation = makeAnimation(Constants.SLIDE_ANIMATION)
+	table.insert(toPreload, slideAnimation)
 	ContentProvider:PreloadAsync(toPreload)
 	if hum.Parent ~= localPlayer.Character then return end
 
@@ -90,6 +101,7 @@ local function bindAnimations(hum: Humanoid)
 		dashTracks[name] = loadTrack(animator, animation, Enum.AnimationPriority.Action, false)
 	end
 	jumpTrack = loadTrack(animator, jumpAnimation, Enum.AnimationPriority.Action, false)
+	slideTrack = loadTrack(animator, slideAnimation, Enum.AnimationPriority.Action, false)
 end
 
 -- Root-space move direction: -Z forward, +X right.
@@ -120,16 +132,88 @@ local function stepAnimations()
 	end
 end
 
--- Plays the sideways dash animation matching the current move direction; a forward
--- or backward dash has no animation.
+-- Plays the dash animation matching the current move direction.
 function MovementController.playDashAnimation()
 	local hum = getHumanoid()
 	if not hum then return end
-	local move = localMove(hum)
-	if not move or math.abs(move.X) <= math.abs(move.Z) then return end
-	local track = if move.X > 0 then dashTracks.Right else dashTracks.Left
+	local move = localMove(hum) or Vector3.zero
+	local track = dashTracks[MovementBlend.dashTrack(move)]
 	if track then
 		track:Play()
+	end
+end
+
+-- Slide: the move direction at the key press carries the character for
+-- SLIDE_DURATION, easing from SLIDE_SPEED to walk speed, keys released or not.
+
+local function endSlide()
+	if not slideDirection then return end
+	slideDirection = nil
+	lastSlideEndedAt = os.clock()
+	if slideVelocity then
+		slideVelocity:Destroy()
+		slideVelocity = nil
+	end
+	if slideTrack and slideTrack.IsPlaying then
+		slideTrack:Stop(Constants.MOVEMENT_ANIM_FADE)
+	end
+end
+
+local function slideSpeed(t: number): number
+	return Constants.SLIDE_SPEED + (Constants.SAFE_WALKSPEED - Constants.SLIDE_SPEED) * t * t
+end
+
+-- Constrains only the horizontal plane so gravity and slopes still apply.
+local function makeSlideVelocity(root: BasePart, direction: Vector3): LinearVelocity
+	local attachment = root:FindFirstChild("RootAttachment") :: Attachment?
+	if not attachment then
+		attachment = Instance.new("Attachment")
+		attachment.Name = "RootAttachment"
+		attachment.Parent = root
+	end
+	local velocity = Instance.new("LinearVelocity")
+	velocity.Name = "SlideVelocity"
+	velocity.Attachment0 = attachment
+	velocity.RelativeTo = Enum.ActuatorRelativeTo.World
+	velocity.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
+	velocity.PrimaryTangentAxis = Vector3.xAxis
+	velocity.SecondaryTangentAxis = Vector3.zAxis
+	velocity.MaxForce = math.huge
+	velocity.PlaneVelocity = Vector2.new(direction.X, direction.Z) * slideSpeed(0)
+	velocity.Parent = root
+	return velocity
+end
+
+local function trySlide()
+	if slideDirection then return end
+	if not CombatController.isCombatActive() then return end
+	if CombatController.getShieldStatus() == Constants.SHIELD_UP then return end
+	if os.clock() - lastSlideEndedAt < Constants.SLIDE_COOLDOWN then return end
+	local hum = getHumanoid()
+	if not hum or hum.FloorMaterial == Enum.Material.Air then return end
+	local root = hum.RootPart
+	local move = hum.MoveDirection
+	if not root or move.Magnitude < 0.1 then return end
+	slideDirection = Vector3.new(move.X, 0, move.Z).Unit
+	slideStartedAt = os.clock()
+	slideVelocity = makeSlideVelocity(root, slideDirection)
+	if slideTrack then
+		slideTrack:Play()
+	end
+end
+
+local function stepSlide()
+	local direction = slideDirection
+	if not direction then return end
+	local hum = getHumanoid()
+	local root = hum and hum.RootPart
+	local elapsed = os.clock() - slideStartedAt
+	if not hum or not root or hum.FloorMaterial == Enum.Material.Air or elapsed >= Constants.SLIDE_DURATION then
+		endSlide()
+		return
+	end
+	if slideVelocity then
+		slideVelocity.PlaneVelocity = Vector2.new(direction.X, direction.Z) * slideSpeed(elapsed / Constants.SLIDE_DURATION)
 	end
 end
 
@@ -178,6 +262,7 @@ local function step()
 	setSprinting(canSprint())
 	aiming = aimHeld and CombatController.isCombatActive()
 	reconcileFov()
+	stepSlide()
 	stepAnimations()
 	if not sprinting then return end
 	local hum = getHumanoid()
@@ -200,12 +285,14 @@ local function bindCharacter(char: Model)
 	if not hum or not hum:IsA("Humanoid") then return end
 	canDoubleJump = false
 	doubleJumped = false
+	slideDirection = nil
 	task.spawn(bindAnimations, hum) -- preloading yields; the state wiring below must not wait on it
 	hum.StateChanged:Connect(function(_old, new)
 		if new == Enum.HumanoidStateType.Landed then
 			canDoubleJump = false
 			doubleJumped = false
 		elseif new == Enum.HumanoidStateType.Jumping then
+			endSlide()
 			if jumpTrack then
 				jumpTrack:Play()
 			end
@@ -244,6 +331,8 @@ function MovementController.init()
 			shiftHeld = true
 		elseif SettingsController.matches(input, "Aim") then
 			aimHeld = true
+		elseif SettingsController.matches(input, "Slide") then
+			trySlide()
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
