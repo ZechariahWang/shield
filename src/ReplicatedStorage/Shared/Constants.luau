@@ -17,7 +17,7 @@ Constants.TEST_END_WALL = "ShortWall"
 -- BOTS (server-driven combatants cloned from ReplicatedStorage.Assets.Rigs.NPC).
 -- They count as players: toward MIN_PLAYERS, the alive count and the last-standing win.
 Constants.BOTS_ENABLED = true
-Constants.BOT_COUNT = 3                   -- spawned at Reveal while BOTS_ENABLED, removed at round end
+Constants.BOT_COUNT = 5                   -- spawned at Reveal while BOTS_ENABLED, removed at round end
 Constants.BOT_RIG_PATH = { "Assets", "Rigs", "NPC" }
 Constants.BOT_SHOOT_INTERVAL = { 2, 5 }    -- seconds between shots, uniform random
 Constants.BOT_SHIELD_INTERVAL = { 4, 10 }  -- seconds between shield raises, uniform random
@@ -159,7 +159,7 @@ Constants.WHITE = Color3.fromRGB(255, 255, 255)       -- #FFFFFF
 
 -- MINIMAP (the Game.Minimap frame authored in Studio; Round phase only)
 Constants.MINIMAP_DOT_SIZE = 6                        -- px
-Constants.MINIMAP_RANGE = 60                          -- studs from the local player to the minimap's edge
+Constants.MINIMAP_RANGE = 100                          -- studs from the local player to the minimap's edge
 Constants.MINIMAP_SHOT_FLASH = 0.35                   -- seconds a dot stays yellow after that combatant fires
 Constants.MINIMAP_ENEMY_COLOR = Constants.TAGGER_COLOR
 Constants.MINIMAP_SHIELD_COLOR = Constants.SHIELD_COLOR
