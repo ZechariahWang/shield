@@ -520,6 +520,28 @@ function CombatSystem.raiseShield(char: Model)
 	raiseShield(char)
 end
 
+-- Read-only state for server-driven combatants (BotBrain).
+function CombatSystem.shieldUp(char: Model): boolean
+	local s = shields[char]
+	return s ~= nil and s.up
+end
+
+function CombatSystem.gunReady(char: Model): boolean
+	local s = shields[char]
+	if not s then return true end
+	return os.clock() - s.lastShotAt >= Constants.PISTOL_COOLDOWN
+end
+
+function CombatSystem.lastBreakAt(char: Model): number
+	local s = shields[char]
+	return if s then s.lastBreakAt else -math.huge
+end
+
+-- A manual lower, with the cooldown, like a player pressing the key again.
+function CombatSystem.lowerShield(char: Model)
+	lowerShield(char, true)
+end
+
 function CombatSystem.registerBot(char: Model)
 	bots[char] = true
 	prepareHitbox(char)

@@ -19,10 +19,33 @@ Constants.TEST_END_WALL = "ShortWall"
 Constants.BOTS_ENABLED = true
 Constants.BOT_COUNT = 5                   -- spawned at Reveal while BOTS_ENABLED, removed at round end
 Constants.BOT_RIG_PATH = { "Assets", "Rigs", "NPC" }
-Constants.BOT_SHOOT_INTERVAL = { 2, 5 }    -- seconds between shots, uniform random
-Constants.BOT_SHIELD_INTERVAL = { 4, 10 }  -- seconds between shield raises, uniform random
-Constants.BOT_AIM_JITTER = 0.2            -- radians of random error on an aimed shot (they miss a lot on purpose)
 Constants.BOT_WAYPOINT_TIMEOUT = 4        -- seconds before a stuck bot picks a new destination
+-- Per-bot skill, rolled uniformly inside each range at spawn (BotBrain._rollSkill).
+Constants.BOT_REACTION_TIME = { 0.4, 1.0 }  -- seconds from first sight to the first shot, and from a threat to the shield
+Constants.BOT_AIM_ERROR = { 0.05, 0.14 }   -- radians of aim error at BOT_AIM_REFERENCE_DISTANCE on a still, freshly seen target
+Constants.BOT_AGGRESSION = { 0.3, 0.9 }    -- 0..1: jump rate, and the chance to re-raise right after a break
+Constants.BOT_SHIELD_SENSE = { 0.3, 0.9 }  -- 0..1: chance to answer a threat (an enemy facing the bot with a ready gun) with the shield
+-- Aim model: error scales with sqrt(distance / reference), grows with target speed, shrinks the longer the target is tracked.
+Constants.BOT_AIM_REFERENCE_DISTANCE = 30
+Constants.BOT_AIM_SPEED_PENALTY = 0.5      -- error multiplier per SAFE_WALKSPEED of target speed
+Constants.BOT_AIM_SETTLE_RATE = 0.15       -- error divides by 1 + seconds tracked * this
+Constants.BOT_FIRE_HESITATION = { 0.2, 1.2 } -- seconds on top of PISTOL_COOLDOWN between shots
+-- Engagement movement.
+Constants.BOT_ENGAGE_DISTANCE = { 20, 45 } -- studs: closes in above the top, backs off below the bottom, strafes in between
+Constants.BOT_STRAFE_SWITCH = { 0.6, 1.6 } -- seconds between strafe direction flips
+Constants.BOT_JUMP_INTERVAL = { 2, 6 }     -- seconds between hops while engaged, divided by (0.5 + aggression)
+Constants.BOT_THREAT_ANGLE = 12            -- degrees: an enemy looking this close to the bot with a ready gun is a threat
+Constants.BOT_THREAT_REROLL = 1.5          -- seconds of sustained threat before the bot rolls its shield sense again
+Constants.BOT_TURN_RATE = 10               -- exp-decay rate the bot turns toward its target while engaged
+-- Roaming.
+Constants.BOT_MEMORY_TIME = 8              -- seconds a lost target's last position is still worth walking to
+Constants.BOT_SPRINT_LEG = 30              -- studs: a roam leg longer than this is run at SPRINT_WALKSPEED
+Constants.BOT_PERCEPTION_INTERVAL = 0.1    -- seconds between line-of-sight scans
+-- Look and name.
+Constants.BOT_AVATAR_TRIES = 3             -- random user ids tried for an avatar before falling back to random body colors
+Constants.BOT_AVATAR_USER_ID_RANGE = { 100000000, 4000000000 }
+Constants.BOT_NAME_ADJECTIVES = { "Shadow", "Blaze", "Frost", "Neon", "Silent", "Crimson", "Turbo", "Pixel", "Rogue", "Storm", "Lunar", "Hyper", "Toxic", "Ghost", "Mystic", "Rapid" }
+Constants.BOT_NAME_NOUNS = { "Knight", "Wolf", "Fox", "Ninja", "Gamer", "Viper", "Falcon", "Reaper", "Tiger", "Hawk", "Sniper", "Racer", "Blade", "Dragon", "Pilot", "Rider" }
 
 -- PISTOL
 Constants.PISTOL_COOLDOWN = 1.0
