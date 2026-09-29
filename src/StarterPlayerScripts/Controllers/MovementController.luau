@@ -9,6 +9,7 @@ local Workspace = game:GetService("Workspace")
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local MovementBlend = require(ReplicatedStorage.Shared.MovementBlend)
 local CombatController = require(script.Parent.CombatController)
+local GrappleController = require(script.Parent.GrappleController)
 local SettingsController = require(script.Parent.SettingsController)
 
 -- Client-side movement extras while combat is active: hold Shift to sprint,
@@ -186,6 +187,8 @@ end
 
 local function trySlide()
 	if slideDirection then return end
+	-- On the rope the Slide key and jump steer instead.
+	if GrappleController.isGrappling() then return end
 	if not CombatController.isCombatActive() then return end
 	if CombatController.getShieldStatus() == Constants.SHIELD_UP then return end
 	if os.clock() - lastSlideEndedAt < Constants.SLIDE_COOLDOWN then return end
@@ -283,6 +286,7 @@ end
 
 local function onJumpRequest()
 	if not CombatController.isCombatActive() then return end
+	if GrappleController.isGrappling() then return end
 	if not canDoubleJump or doubleJumped then return end
 	local hum = getHumanoid()
 	if not hum or hum:GetState() ~= Enum.HumanoidStateType.Freefall then return end

@@ -14,7 +14,8 @@ local SettingsController = require(script.Parent.SettingsController)
 -- character is client-simulated; the server (GrappleSystem) validates the
 -- request and draws the rope for everyone. The pull is a LinearVelocity with a
 -- finite force that brakes before the anchor, so geometry in the way stops the
--- character instead of launching it.
+-- character instead of launching it. While attached the movement input steers
+-- sideways, jump steers up and the Slide key steers down, all across the rope.
 local GrappleController = {}
 
 local localPlayer = Players.LocalPlayer
@@ -28,6 +29,7 @@ local startSpeed = 0
 local startedAt = 0
 local stalledSince: number? = nil
 local lastReleaseAt = -math.huge
+local downHeld = false
 
 local function getRoot(): BasePart?
 	local char = localPlayer.Character
@@ -129,6 +131,25 @@ local function isStalled(root: BasePart, now: number): boolean
 	return now - stalledSince >= Constants.GRAPPLE_STALL_TIME
 end
 
+-- Sideways comes from the movement input along the camera's right (A/D, or the
+-- thumbstick); up is jump held, down the Slide key. Humanoid.Jump is read rather
+-- than JumpRequest, which fires with gaps of up to half a second while held.
+local function steering(root: BasePart, direction: Vector3): Vector3
+	local camera = Workspace.CurrentCamera
+	local hum = (root.Parent :: Instance):FindFirstChildOfClass("Humanoid")
+	if not camera or not hum then return Vector3.zero end
+	local right = camera.CFrame.RightVector
+	local sideways = math.clamp(hum.MoveDirection:Dot(right), -1, 1)
+	local vertical = 0
+	if hum.Jump then
+		vertical += 1
+	end
+	if downHeld then
+		vertical -= 1
+	end
+	return GrappleMath.steer(direction, right, sideways, vertical)
+end
+
 local function step()
 	local point = anchor
 	if not point then return end
@@ -145,7 +166,9 @@ local function step()
 		release()
 		return
 	end
-	pull.VectorVelocity = offset.Unit * GrappleMath.pullSpeed(startSpeed, elapsed, distance)
+	local direction = offset.Unit
+	local along = direction * GrappleMath.pullSpeed(startSpeed, elapsed, distance)
+	pull.VectorVelocity = along + steering(root, direction)
 end
 
 function GrappleController.init()
@@ -166,9 +189,15 @@ function GrappleController.init()
 		if gameProcessed then return end
 		if SettingsController.matches(input, "Grapple") then
 			GrappleController.tryGrapple()
+		elseif SettingsController.matches(input, "Slide") then
+			downHeld = true
 		end
 	end)
-	UserInputService.JumpRequest:Connect(release)
+	UserInputService.InputEnded:Connect(function(input)
+		if SettingsController.matches(input, "Slide") then
+			downHeld = false
+		end
+	end)
 
 	RunService.RenderStepped:Connect(step)
 end

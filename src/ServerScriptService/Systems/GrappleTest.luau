@@ -34,6 +34,29 @@ return function()
 	local closing = GrappleMath.pullSpeed(0, 100, arrive + 5)
 	assert(closing > Constants.GRAPPLE_ARRIVE_SPEED and closing < Constants.GRAPPLE_SPEED, "brakes on approach")
 
+	-- Steering: across the rope only, at most GRAPPLE_STEER_SPEED.
+	local steerSpeed = Constants.GRAPPLE_STEER_SPEED
+	local ahead = Vector3.new(0, 0, -1)
+	local right = Vector3.new(1, 0, 0)
+	assert(GrappleMath.steer(ahead, right, 0, 0) == Vector3.zero, "no input, no steering")
+	local sideways = GrappleMath.steer(ahead, right, 1, 0)
+	assert(near(sideways.X, steerSpeed) and near(sideways.Y, 0) and near(sideways.Z, 0), "steer right")
+	local left = GrappleMath.steer(ahead, right, -1, 0)
+	assert(near(left.X, -steerSpeed), "steer left")
+	local up = GrappleMath.steer(ahead, right, 0, 1)
+	assert(near(up.Y, steerSpeed) and near(up.X, 0), "steer up")
+	local down = GrappleMath.steer(ahead, right, 0, -1)
+	assert(near(down.Y, -steerSpeed), "steer down")
+	local both = GrappleMath.steer(ahead, right, 1, 1)
+	assert(near(both.Magnitude, steerSpeed), "diagonal is not faster")
+	assert(both.X > 0 and both.Y > 0, "diagonal direction")
+	-- Input along the rope adds nothing: the pull owns that axis.
+	assert(near(GrappleMath.steer(right, right, 1, 0).Magnitude, 0), "sideways along the rope is dropped")
+	local climbing = Vector3.new(0, 0.6, -0.8)
+	local lift = GrappleMath.steer(climbing, right, 0, 1)
+	assert(near(lift:Dot(climbing), 0), "steering stays across a climbing rope")
+	assert(lift.Y > 0 and lift.Magnitude <= steerSpeed + 1e-4, "lift on a climbing rope")
+
 	-- Release clamp: direction kept, speed capped.
 	local slow = Vector3.new(3, 4, 0)
 	assert(GrappleMath.clampSpeed(slow, 10) == slow, "slow velocity untouched")

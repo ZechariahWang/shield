@@ -30,6 +30,19 @@ function GrappleMath.pullSpeed(startSpeed: number, elapsed: number, distance: nu
 	return math.min(ramp, brake)
 end
 
+-- Steering velocity from a sideways and a vertical input (-1..1 each): across the
+-- rope only, since the pull owns the axis along it. `direction` is the unit
+-- vector to the anchor, `right` the unit vector sideways input pushes along.
+function GrappleMath.steer(direction: Vector3, right: Vector3, sideways: number, vertical: number): Vector3
+	local raw = right * sideways + Vector3.yAxis * vertical
+	local across = raw - direction * raw:Dot(direction)
+	local amount = across.Magnitude
+	if amount > 1 then
+		across = across / amount
+	end
+	return across * Constants.GRAPPLE_STEER_SPEED
+end
+
 -- The velocity with its speed capped; a non-finite velocity becomes zero.
 function GrappleMath.clampSpeed(velocity: Vector3, maxSpeed: number): Vector3
 	if not isFiniteVector(velocity) then return Vector3.zero end
