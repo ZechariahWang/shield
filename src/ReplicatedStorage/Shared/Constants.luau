@@ -165,7 +165,7 @@ Constants.DEFAULT_KEYBINDS = {           -- Enum.KeyCode names or MouseButton1/2
 	Aim = "MouseButton2",
 	Slide = "C",
 }
-Constants.SENSITIVITY_DEFAULT = 1        -- UserInputService.MouseDeltaSensitivity: scales the mouse delta the stock camera turns with
+Constants.SENSITIVITY_DEFAULT = 1        -- UserInputService.MouseDeltaSensitivity while aiming: scales the mouse delta on top of the player's Roblox sensitivity
 Constants.SENSITIVITY_MIN = 0.1
 Constants.SENSITIVITY_MAX = 4
 Constants.SENSITIVITY_STEP = 0.1

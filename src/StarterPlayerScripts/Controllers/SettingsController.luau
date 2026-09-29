@@ -7,10 +7,11 @@ local Settings = require(ReplicatedStorage.Shared.Settings)
 local ShopController = require(script.Parent.ShopController)
 
 -- The player's settings on this client: keybinds the input controllers ask
--- about through `matches`, and the mouse sensitivity, applied as
--- UserInputService.MouseDeltaSensitivity (UserGameSettings.MouseSensitivity is
--- off limits to a LocalScript). The record arrives inside ShopState and every
--- edit goes back through SettingsUpdate. The lobby SETTINGS modal edits
+-- about through `matches`, and the aim sensitivity, which MovementController
+-- applies as UserInputService.MouseDeltaSensitivity only while the Aim key is
+-- held (the rest of the time the stock camera runs on the player's own Roblox
+-- sensitivity). The record arrives inside ShopState and every edit goes back
+-- through SettingsUpdate. The lobby SETTINGS modal edits
 -- sensitivity anywhere (steppers or a typed number); the keybind rows exist
 -- only on PC. Rebinding goes through the Confirm overlay twice: first as a
 -- yes/no question, then covering the rows while it waits for the key, so no
@@ -78,7 +79,6 @@ local function apply(raw: any)
 	for action, label in hints do
 		label.Text = Settings.displayName(record.keybinds[action])
 	end
-	UserInputService.MouseDeltaSensitivity = record.sensitivity
 	refreshRows()
 	changed:Fire(record)
 end
@@ -232,7 +232,7 @@ local function buildRows(lobbyGui: ScreenGui)
 			refreshRows()
 		end)
 	end
-	sensitivityRow = buildRow(template, container, "SENSITIVITY", #Settings.ACTIONS + 1, true)
+	sensitivityRow = buildRow(template, container, "AIM SENSITIVITY", #Settings.ACTIONS + 1, true)
 end
 
 function SettingsController.init()

@@ -258,10 +258,20 @@ local function setSprinting(on: boolean)
 	end
 end
 
+-- The aim sensitivity multiplies the mouse delta only while aiming; otherwise
+-- the stock camera turns on the player's own Roblox sensitivity alone.
+local function reconcileSensitivity()
+	local target = if aiming then SettingsController.get().sensitivity else 1
+	if UserInputService.MouseDeltaSensitivity ~= target then
+		UserInputService.MouseDeltaSensitivity = target
+	end
+end
+
 local function step()
 	setSprinting(canSprint())
 	aiming = aimHeld and CombatController.isCombatActive()
 	reconcileFov()
+	reconcileSensitivity()
 	stepSlide()
 	stepAnimations()
 	if not sprinting then return end
