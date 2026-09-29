@@ -9,7 +9,7 @@ local GrappleMath = require(ReplicatedStorage.Shared.GrappleMath)
 local CombatController = require(script.Parent.CombatController)
 local SettingsController = require(script.Parent.SettingsController)
 
--- Grapple: the Grapple key latches one rope onto the map geometry under the
+-- Grapple: holding the Grapple key latches one rope onto the map geometry under the
 -- crosshair and pulls the character to it. The pull runs here because the local
 -- character is client-simulated; the server (GrappleSystem) validates the
 -- request and draws the rope for everyone. The pull is a LinearVelocity with a
@@ -89,12 +89,8 @@ local function start(root: BasePart, hum: Humanoid, point: Vector3)
 	GrappleRequestRemote:FireServer(point)
 end
 
--- Pressing the key while attached lets go.
-function GrappleController.tryGrapple()
-	if anchor then
-		release()
-		return
-	end
+local function tryGrapple()
+	if anchor then return end
 	if not canHold() then return end
 	if os.clock() - lastReleaseAt < Constants.GRAPPLE_COOLDOWN then return end
 
@@ -113,6 +109,16 @@ function GrappleController.tryGrapple()
 	if (aimPoint - root.Position).Magnitude <= Constants.GRAPPLE_ARRIVE_DISTANCE then return end
 
 	start(root, hum, aimPoint)
+end
+
+-- The rope lives while the key is held: down fires it, up lets go. A rope that
+-- let go on its own (arrival, stall) needs a new press.
+function GrappleController.setHeld(on: boolean)
+	if on then
+		tryGrapple()
+	else
+		release()
+	end
 end
 
 function GrappleController.isGrappling(): boolean
@@ -188,13 +194,15 @@ function GrappleController.init()
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
 		if SettingsController.matches(input, "Grapple") then
-			GrappleController.tryGrapple()
+			GrappleController.setHeld(true)
 		elseif SettingsController.matches(input, "Slide") then
 			downHeld = true
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
-		if SettingsController.matches(input, "Slide") then
+		if SettingsController.matches(input, "Grapple") then
+			GrappleController.setHeld(false)
+		elseif SettingsController.matches(input, "Slide") then
 			downHeld = false
 		end
 	end)

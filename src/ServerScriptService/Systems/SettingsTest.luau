@@ -55,7 +55,8 @@ return function()
 
 	-- A record saved before an action existed gets that action's default.
 	local old = Settings.merge({ keybinds = { Shoot = "F" } })
-	assert(old.keybinds.Grapple == "Four", "grapple default")
+	assert(old.keybinds.Grapple == "MouseButton2", "grapple default")
+	assert(old.keybinds.Aim == "Four", "aim default")
 
 	-- The merge is a fixed point.
 	local again = Settings.merge(changed)

@@ -13,7 +13,7 @@ local GrappleController = require(script.Parent.GrappleController)
 local SettingsController = require(script.Parent.SettingsController)
 
 -- Client-side movement extras while combat is active: hold Shift to sprint,
--- hold right click to aim (FOV zoom only), press jump again in the air for a
+-- hold the Aim key to aim (FOV zoom only), press jump again in the air for a
 -- double jump, and press the Slide key while moving on the ground to slide. This
 -- controller is the only writer of the camera FOV. The local character is
 -- client-simulated, so WalkSpeed is set here and re-applied every frame because
@@ -116,7 +116,10 @@ local function stepAnimations()
 	local hum = getHumanoid()
 	if not hum or not moveTracks.Idle then return end
 	local move = localMove(hum)
-	local grounded = move ~= nil and hum.FloorMaterial ~= Enum.Material.Air
+	local grounded = move ~= nil and hum.FloorMaterial ~= Enum.Material.Air and not GrappleController.isGrappling()
+	-- The fade restarts every frame, which stretches it; the ground fade would
+	-- leave the legs running for a moment after takeoff.
+	local fade = if grounded then Constants.MOVEMENT_ANIM_FADE else Constants.MOVEMENT_AIR_FADE
 	local weights = MovementBlend.weights(move or Vector3.zero, hum.MoveDirection.Magnitude, grounded, sprinting)
 
 	local root = hum.RootPart
@@ -128,7 +131,7 @@ local function stepAnimations()
 		if not track.IsPlaying then
 			track:Play(0, WEIGHT_EPSILON)
 		end
-		track:AdjustWeight(math.max(weights[name] or 0, WEIGHT_EPSILON), Constants.MOVEMENT_ANIM_FADE)
+		track:AdjustWeight(math.max(weights[name] or 0, WEIGHT_EPSILON), fade)
 		track:AdjustSpeed(MovementBlend.playback(name, horizontalSpeed))
 	end
 end
@@ -321,7 +324,7 @@ local function bindCharacter(char: Model)
 	end)
 end
 
--- Touch stand-ins for holding Shift and right click.
+-- Touch stand-ins for holding the Sprint and Aim keys.
 function MovementController.setSprintHeld(on: boolean)
 	shiftHeld = on
 end
