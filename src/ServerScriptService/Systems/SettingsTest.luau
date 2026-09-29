@@ -50,6 +50,12 @@ return function()
 	assert(Settings.displayName("MouseButton2") == "RMB", "rmb")
 	assert(Settings.displayName("LeftShift") == "LSHIFT", "lshift")
 	assert(Settings.displayName("Q") == "Q", "q")
+	assert(Settings.displayName("Four") == "4", "digit")
+	assert(Settings.displayName("Zero") == "0", "zero")
+
+	-- A record saved before an action existed gets that action's default.
+	local old = Settings.merge({ keybinds = { Shoot = "F" } })
+	assert(old.keybinds.Grapple == "Four", "grapple default")
 
 	-- The merge is a fixed point.
 	local again = Settings.merge(changed)

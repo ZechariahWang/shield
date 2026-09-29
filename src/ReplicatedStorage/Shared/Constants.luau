@@ -131,6 +131,19 @@ Constants.MOVEMENT_ANIM_REFERENCE_SPEED = 16  -- studs per second the walk cycle
 Constants.MOVEMENT_RUN_REFERENCE_SPEED = 24   -- same for the run cycle (the sprint speed)
 Constants.MOVEMENT_ANIM_FADE = 0.15           -- seconds the movement blend eases between weights
 Constants.PUSH_MAX_ACCEL = 6000               -- studs/s^2: MaxForce per unit of mass for the dash and grapple constraints. Finite, so a wall stops the character (an unlimited force fights the collision and launches it); under about 2000 a grounded humanoid holds the character in place
+Constants.GRAPPLE_RANGE = 120                 -- studs from the root to the anchor
+Constants.GRAPPLE_SPEED = 90                  -- studs per second along the rope at full pull
+Constants.GRAPPLE_ACCEL = 250                 -- studs/s^2 the pull ramps up by, from the speed already carried toward the anchor
+Constants.GRAPPLE_ARRIVE_DISTANCE = 6         -- studs from the anchor at which the rope lets go
+Constants.GRAPPLE_ARRIVE_SPEED = 30           -- studs per second the pull has braked to on arrival
+Constants.GRAPPLE_BRAKE_RATE = 4              -- studs per second of pull allowed per stud left to the arrival distance
+Constants.GRAPPLE_MAX_TIME = 3                -- seconds before a rope lets go on its own
+Constants.GRAPPLE_STALL_SPEED = 4             -- studs per second: slower than this for GRAPPLE_STALL_TIME means something is in the way
+Constants.GRAPPLE_STALL_TIME = 0.3
+Constants.GRAPPLE_COOLDOWN = 4                -- seconds from a release to the next grapple
+Constants.GRAPPLE_COOLDOWN_TOLERANCE = 0.2    -- server slack: cooldown seconds and range studs (the client stamps at send)
+Constants.GRAPPLE_ROPE_WIDTH = 0.15           -- studs
+Constants.GRAPPLE_ROPE_COLOR = Color3.fromRGB(235, 235, 235)
 Constants.LEAN_MAX_ANGLE = 8                  -- degrees the torso tips toward the movement direction at full input
 Constants.LEAN_RATE = 10                      -- exp-decay rate of the lean toward its target (server Heartbeat)
 
@@ -165,6 +178,7 @@ Constants.DEFAULT_KEYBINDS = {           -- Enum.KeyCode names or MouseButton1/2
 	Sprint = "LeftShift",
 	Aim = "MouseButton2",
 	Slide = "C",
+	Grapple = "Four",
 }
 Constants.SENSITIVITY_DEFAULT = 1        -- UserInputService.MouseDeltaSensitivity while aiming: scales the mouse delta on top of the player's Roblox sensitivity
 Constants.SENSITIVITY_MIN = 0.1

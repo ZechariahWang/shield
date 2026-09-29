@@ -38,7 +38,7 @@ local listening: string? = nil
 local confirming: string? = nil
 local SettingsUpdateRemote: RemoteEvent
 
-local ROW_LABELS = { Shoot = "SHOOT", Shield = "SHIELD", Dash = "DASH", Sprint = "SPRINT", Aim = "AIM", Slide = "SLIDE" }
+local ROW_LABELS = { Shoot = "SHOOT", Shield = "SHIELD", Dash = "DASH", Sprint = "SPRINT", Aim = "AIM", Slide = "SLIDE", Grapple = "GRAPPLE" }
 
 function SettingsController.get(): Settings.Record
 	return record

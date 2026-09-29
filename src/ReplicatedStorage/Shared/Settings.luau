@@ -16,7 +16,9 @@ export type Record = {
 local MOUSE_BUTTONS = { MouseButton1 = "LMB", MouseButton2 = "RMB", MouseButton3 = "MMB" }
 local RESERVED = { Escape = true, Unknown = true }
 
-Settings.ACTIONS = { "Shoot", "Shield", "Dash", "Sprint", "Aim", "Slide" }
+local DIGITS = { Zero = "0", One = "1", Two = "2", Three = "3", Four = "4", Five = "5", Six = "6", Seven = "7", Eight = "8", Nine = "9" }
+
+Settings.ACTIONS = { "Shoot", "Shield", "Dash", "Sprint", "Aim", "Slide", "Grapple" }
 
 function Settings.isKeyName(name: any): boolean
 	if typeof(name) ~= "string" or RESERVED[name] then return false end
@@ -30,6 +32,8 @@ end
 function Settings.displayName(name: string): string
 	local mouse = MOUSE_BUTTONS[name]
 	if mouse then return mouse end
+	local digit = DIGITS[name]
+	if digit then return digit end
 	local short = name:gsub("^Left", "L"):gsub("^Right", "R")
 	return short:upper()
 end

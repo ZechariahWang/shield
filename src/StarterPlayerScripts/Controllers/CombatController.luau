@@ -138,7 +138,7 @@ end
 
 -- Direction from the head to what the crosshair is over, plus the aim point and the part
 -- under it (nil on a miss). The part and point go to the server as the hit claim.
-local function getAim(headPosition: Vector3): (Vector3?, Vector3?, BasePart?)
+function CombatController.getAim(headPosition: Vector3): (Vector3?, Vector3?, BasePart?)
 	local camera = Workspace.CurrentCamera
 	if not camera then return nil end
 
@@ -180,7 +180,7 @@ function CombatController.tryShoot()
 	local head = character:FindFirstChild("Head") :: BasePart?
 	if not head then return end
 
-	local direction, aimPoint, hitPart = getAim(head.Position)
+	local direction, aimPoint, hitPart = CombatController.getAim(head.Position)
 	if not direction or not aimPoint then return end
 
 	lastShotAt = now

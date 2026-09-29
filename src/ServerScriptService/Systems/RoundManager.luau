@@ -7,6 +7,7 @@ local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local PlayerState = require(script.Parent.PlayerState)
 local CombatSystem = require(script.Parent.CombatSystem)
 local AbilitySystem = require(script.Parent.AbilitySystem)
+local GrappleSystem = require(script.Parent.GrappleSystem)
 local MapManager = require(script.Parent.MapManager)
 local BotSystem = require(script.Parent.BotSystem)
 local RagdollSystem = require(script.Parent.RagdollSystem)
@@ -109,6 +110,7 @@ local function endRound(reason: string, winners: { string })
 	-- added below is the only one left on a character.
 	CombatSystem.stop()
 	AbilitySystem.stop()
+	GrappleSystem.stop()
 	BotSystem.stop()
 
 	for _, player in Players:GetPlayers() do
@@ -206,6 +208,7 @@ local function runRound()
 
 	CombatSystem.start()
 	AbilitySystem.start()
+	GrappleSystem.start()
 	BotSystem.start()
 
 	local roundEnd = os.clock() + Constants.ROUND_TIME
