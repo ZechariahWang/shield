@@ -31,7 +31,7 @@ return function()
 	local arrive = Constants.GRAPPLE_ARRIVE_DISTANCE
 	assert(near(GrappleMath.pullSpeed(0, 100, arrive), Constants.GRAPPLE_ARRIVE_SPEED), "arrival speed at the anchor")
 	assert(near(GrappleMath.pullSpeed(0, 100, 0), Constants.GRAPPLE_ARRIVE_SPEED), "never below the arrival speed")
-	local closing = GrappleMath.pullSpeed(0, 100, arrive + 5)
+	local closing = GrappleMath.pullSpeed(0, 100, arrive + 1)
 	assert(closing > Constants.GRAPPLE_ARRIVE_SPEED and closing < Constants.GRAPPLE_SPEED, "brakes on approach")
 
 	-- Steering: across the rope only, at most GRAPPLE_STEER_SPEED.
