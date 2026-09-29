@@ -1,4 +1,5 @@
 local CollectionService = game:GetService("CollectionService")
+local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -6,7 +7,8 @@ local Constants = require(ReplicatedStorage.Shared.Constants)
 
 -- Leaves a ragdolled corpse where a combatant was eliminated. The real character
 -- is untouched (it still teleports to the lobby); the corpse is a stripped clone
--- under Workspace.Ragdolls that shots and touches ignore, cleared at round end.
+-- under Workspace.Ragdolls that shots and touches ignore, removed after
+-- RAGDOLL_LIFETIME (respawns would pile them up) or at match end.
 local RagdollSystem = {}
 
 local FOLDER_NAME = "Ragdolls"
@@ -117,6 +119,7 @@ function RagdollSystem.spawn(victim: Model, killer: Model?): Model?
 		end
 	end
 	corpse.Parent = folder()
+	Debris:AddItem(corpse, Constants.RAGDOLL_LIFETIME)
 	local corpseHumanoid = corpse:FindFirstChildOfClass("Humanoid")
 	if corpseHumanoid then
 		corpseHumanoid:ChangeState(Enum.HumanoidStateType.Physics)

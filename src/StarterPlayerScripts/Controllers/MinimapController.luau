@@ -142,7 +142,7 @@ local function update()
 end
 
 local function reconcileVisibility()
-	local inArena = currentPhase == Constants.PHASE_REVEAL or currentPhase == Constants.PHASE_ROUND
+	local inArena = currentPhase == Constants.PHASE_ROUND
 	local show = inArena and localState == Constants.STATE_SAFE
 	frame.Visible = show
 	if not show then

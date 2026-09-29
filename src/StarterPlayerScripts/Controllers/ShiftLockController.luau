@@ -63,7 +63,7 @@ end
 
 local function reconcile()
 	local active = localState == Constants.STATE_SAFE
-		and (currentPhase == Constants.PHASE_REVEAL or currentPhase == Constants.PHASE_ROUND)
+		and currentPhase == Constants.PHASE_ROUND
 	setLocked(active)
 end
 

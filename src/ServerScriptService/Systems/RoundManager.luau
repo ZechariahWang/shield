@@ -1,6 +1,5 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local Catalog = require(ReplicatedStorage.Shared.Catalog)
@@ -9,20 +8,36 @@ local CombatSystem = require(script.Parent.CombatSystem)
 local AbilitySystem = require(script.Parent.AbilitySystem)
 local GrappleSystem = require(script.Parent.GrappleSystem)
 local MapManager = require(script.Parent.MapManager)
+local MatchScore = require(script.Parent.MatchScore)
 local BotSystem = require(script.Parent.BotSystem)
 local RagdollSystem = require(script.Parent.RagdollSystem)
 local Store = require(script.Parent.Store)
 local WeaponModel = require(script.Parent.WeaponModel)
 
+-- The match loop: a free-for-all deathmatch. Players wait in the lobby and enter
+-- the arena with SpawnRequest; a killed player goes back to the lobby and may
+-- spawn again after RESPAWN_DELAY. The first combatant to KILL_TARGET kills
+-- wins, or the top scorer when ROUND_TIME runs out.
 local RoundManager = {}
-
-local minPlayers = if Constants.TEST_MODE then 1 else Constants.MIN_PLAYERS
 
 local currentPhase = Constants.PHASE_LOBBY
 local currentPhaseEndClock = 0
 local currentPhaseExtra: any = nil
+local lastDeathAt: { [Player]: number } = {}
 local RoundStateRemote: RemoteEvent
 local KillFeedRemote: RemoteEvent
+local SpawnRequestRemote: RemoteEvent
+
+local function ensureRemote(parent: Instance, name: string): RemoteEvent
+	local existing = parent:FindFirstChild(name)
+	if existing and existing:IsA("RemoteEvent") then
+		return existing
+	end
+	local remote = Instance.new("RemoteEvent")
+	remote.Name = name
+	remote.Parent = parent
+	return remote
+end
 
 local function broadcastPhase(phase: string, duration: number?, extra: any?)
 	currentPhase = phase
@@ -82,20 +97,39 @@ local function healAllPlayers()
 	end
 end
 
--- Everyone still standing: Safe players and alive bots (bots count as players).
-local function survivorNames(): { string }
-	local names: { string } = {}
-	for _, p in PlayerState.getAllInState(Constants.STATE_SAFE) do
-		table.insert(names, p.Name)
-	end
-	for _, name in BotSystem.aliveNames() do
-		table.insert(names, name)
-	end
-	return names
+-- A match needs a real player on the server, and MIN_PLAYERS counting the bots.
+local function enoughPlayers(): boolean
+	local players = #Players:GetPlayers()
+	if players < 1 then return false end
+	return players + BotSystem.plannedCount() >= Constants.MIN_PLAYERS
 end
 
-local function aliveCount(): number
-	return PlayerState.countInState(Constants.STATE_SAFE) + #BotSystem.aliveNames()
+-- The top scorer alone; nobody when no kill was scored.
+local function winnerNames(): { string }
+	local name = MatchScore.leader()
+	if name then
+		return { name }
+	end
+	return {}
+end
+
+-- From the lobby into the arena. Every rule of the SpawnRequest remote is here.
+local function spawnIntoArena(player: Player)
+	if currentPhase ~= Constants.PHASE_ROUND then return end
+	if PlayerState.get(player) ~= Constants.STATE_LOBBY then return end
+	local sinceDeath = os.clock() - (lastDeathAt[player] or -math.huge)
+	if sinceDeath < Constants.RESPAWN_DELAY then return end
+
+	local char = player.Character
+	if not char then return end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not hum or hum.Health <= 0 or not root then return end
+
+	CombatSystem.revive(char)
+	setSafe(player)
+	MapManager.teleportToArena(player)
+	CombatSystem.protect(char)
 end
 
 local function endRound(reason: string, winners: { string })
@@ -157,98 +191,41 @@ local function endRound(reason: string, winners: { string })
 	task.wait(Constants.END_TIME)
 end
 
--- Test mode: the round ends when a Safe player's character touches the end wall.
--- Connections die with the map, so nothing to clean up.
-local function bindTestEndWall(onTouched: () -> ())
-	local map = Workspace:FindFirstChild("LoadedMap")
-	if not map then return end
-	for _, part in map:GetDescendants() do
-		if not part:IsA("BasePart") or part.Name ~= Constants.TEST_END_WALL then continue end
-		part.Touched:Connect(function(hit)
-			local char = hit:FindFirstAncestorOfClass("Model")
-			if not char then return end
-			local player = Players:GetPlayerFromCharacter(char)
-			if player and PlayerState.get(player) == Constants.STATE_SAFE then
-				onTouched()
-			end
-		end)
-	end
-end
-
-local function runRound()
-	local participants: { Player } = {}
-	for _, player in Players:GetPlayers() do
-		if player.Character then
-			setSafe(player)
-			MapManager.teleportToArena(player)
-			table.insert(participants, player)
-		end
-	end
-
-	if #participants + BotSystem.plannedCount() < minPlayers then
-		for _, player in participants do
-			setLobby(player)
-			MapManager.teleportToLobby(player)
-		end
-		MapManager.unloadMap()
-		broadcastPhase(Constants.PHASE_LOBBY)
-		return
-	end
-
-	BotSystem.spawn()
-
-	-- Reveal phase: positioning countdown. Shooting, shields and dash stay off.
-	broadcastPhase(Constants.PHASE_REVEAL, Constants.REVEAL_TIME, nil)
-	task.wait(Constants.REVEAL_TIME)
-
-	if aliveCount() < minPlayers then
-		endRound(Constants.REASON_ABORTED, {})
-		return
-	end
+local function runMatch()
+	MatchScore.reset()
+	table.clear(lastDeathAt)
 
 	CombatSystem.start()
 	AbilitySystem.start()
 	GrappleSystem.start()
+	BotSystem.spawn()
 	BotSystem.start()
 
-	local roundEnd = os.clock() + Constants.ROUND_TIME
+	local matchEnd = os.clock() + Constants.ROUND_TIME
 	broadcastPhase(Constants.PHASE_ROUND, Constants.ROUND_TIME, nil)
 
-	local endWallTouched = false
-	if Constants.TEST_MODE then
-		bindTestEndWall(function()
-			endWallTouched = true
-		end)
-	end
-
-	while Constants.TEST_MODE or os.clock() < roundEnd do
+	while os.clock() < matchEnd do
 		task.wait(0.25)
 
-		if #Players:GetPlayers() + BotSystem.plannedCount() < minPlayers then
+		if not enoughPlayers() then
 			endRound(Constants.REASON_ABORTED, {})
 			return
 		end
 
-		if Constants.TEST_MODE then
-			if endWallTouched or PlayerState.countInState(Constants.STATE_SAFE) < 1 then
-				endRound(Constants.REASON_SURVIVED, survivorNames())
-				return
-			end
-		elseif aliveCount() <= 1 then
-			endRound(Constants.REASON_LAST_STANDING, survivorNames())
+		if MatchScore.targetReached() then
+			endRound(Constants.REASON_KILL_TARGET, winnerNames())
 			return
 		end
 	end
 
-	-- Time up: every remaining player is a winner.
-	endRound(Constants.REASON_SURVIVED, survivorNames())
+	endRound(Constants.REASON_TIME_UP, winnerNames())
 end
 
 local function gameLoop()
 	while true do
 		broadcastPhase(Constants.PHASE_LOBBY)
 
-		while PlayerState.countInState(Constants.STATE_LOBBY) + BotSystem.plannedCount() < minPlayers do
+		while not enoughPlayers() do
 			task.wait(1)
 		end
 
@@ -259,15 +236,7 @@ local function gameLoop()
 			continue
 		end
 
-		broadcastPhase(Constants.PHASE_INTERMISSION, Constants.INTERMISSION_TIME)
-		task.wait(Constants.INTERMISSION_TIME)
-
-		if PlayerState.countInState(Constants.STATE_LOBBY) + BotSystem.plannedCount() < minPlayers then
-			MapManager.unloadMap()
-			continue
-		end
-
-		runRound()
+		runMatch()
 	end
 end
 
@@ -283,6 +252,9 @@ local function onPlayerEliminated(victim: Model, killer: Model?)
 	local killerName: string? = if killer then combatantName(killer) else nil
 	KillFeedRemote:FireAllClients(killerName, combatantName(victim))
 
+	if killerName then
+		MatchScore.addKill(killerName)
+	end
 	local killerPlayer = if killer then Players:GetPlayerFromCharacter(killer) else nil
 	if killerPlayer then
 		Store.addCoins(killerPlayer, Constants.SHOP_COINS_PER_KILL)
@@ -293,6 +265,7 @@ local function onPlayerEliminated(victim: Model, killer: Model?)
 
 	local victimPlayer = Players:GetPlayerFromCharacter(victim)
 	if victimPlayer then
+		lastDeathAt[victimPlayer] = os.clock()
 		setLobby(victimPlayer)
 		MapManager.teleportToLobby(victimPlayer)
 	elseif BotSystem.isBot(victim) then
@@ -307,14 +280,13 @@ local function onCharacterAdded(player: Player, char: Model)
 	if hum then
 		hum.BreakJointsOnDeath = false
 		-- Every death reloads the character at once instead of leaving the body lying
-		-- stiff until the respawn timer. Dying while Safe in the arena also sends the
-		-- player back to the lobby: a Round death is an elimination with no killer
-		-- (kill feed, ragdoll), a Reveal death is just the trip back.
+		-- stiff until the respawn timer. Dying while Safe in the arena (a reset) is an
+		-- elimination with no killer: kill feed, ragdoll, back to the lobby.
 		hum.Died:Connect(function()
 			if PlayerState.get(player) == Constants.STATE_SAFE then
 				if currentPhase == Constants.PHASE_ROUND then
 					onPlayerEliminated(char, nil)
-				elseif currentPhase == Constants.PHASE_REVEAL then
+				else
 					setLobby(player)
 				end
 			end
@@ -330,19 +302,9 @@ local function onCharacterAdded(player: Player, char: Model)
 	syncPhaseTo(player)
 	PlayerState.syncTo(player)
 
-	local state = PlayerState.get(player)
-	local inRoundPhase = currentPhase == Constants.PHASE_ROUND or currentPhase == Constants.PHASE_REVEAL
-	local inActiveRound = inRoundPhase
-		and state == Constants.STATE_SAFE
-		and MapManager.hasMap()
-
-	if inActiveRound then
-		setSafe(player)
-		MapManager.teleportToArena(player)
-	else
-		setLobby(player)
-		MapManager.teleportToLobby(player)
-	end
+	-- A new character always starts in the lobby; the arena is entered with SpawnRequest.
+	setLobby(player)
+	MapManager.teleportToLobby(player)
 end
 
 local function bindPlayer(player: Player)
@@ -357,19 +319,16 @@ end
 function RoundManager.init()
 	local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 	RoundStateRemote = Remotes:WaitForChild("RoundStateChanged") :: RemoteEvent
-
-	local existingKillFeed = Remotes:FindFirstChild("KillFeed")
-	if existingKillFeed and existingKillFeed:IsA("RemoteEvent") then
-		KillFeedRemote = existingKillFeed
-	else
-		KillFeedRemote = Instance.new("RemoteEvent")
-		KillFeedRemote.Name = "KillFeed"
-		KillFeedRemote.Parent = Remotes
-	end
+	KillFeedRemote = ensureRemote(Remotes, "KillFeed")
+	SpawnRequestRemote = ensureRemote(Remotes, "SpawnRequest")
 
 	CombatSystem.PlayerEliminated:Connect(onPlayerEliminated)
+	SpawnRequestRemote.OnServerEvent:Connect(spawnIntoArena)
 
 	Players.PlayerAdded:Connect(bindPlayer)
+	Players.PlayerRemoving:Connect(function(player)
+		lastDeathAt[player] = nil
+	end)
 	for _, player in Players:GetPlayers() do
 		bindPlayer(player)
 	end

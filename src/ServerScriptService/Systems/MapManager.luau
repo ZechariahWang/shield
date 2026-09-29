@@ -1,5 +1,9 @@
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local ServerStorage = game:GetService("ServerStorage")
+
+local Constants = require(ReplicatedStorage.Shared.Constants)
 
 local MapManager = {}
 
@@ -98,8 +102,62 @@ function MapManager.randomSpawnCFrame(): CFrame?
 	return spawns[math.random(1, #spawns)].CFrame
 end
 
+-- Index of the spawn point whose nearest enemy is farthest away; any point
+-- when there are no enemies, nil when there are no spawn points.
+function MapManager._pickSpawn(spawns: { Vector3 }, enemies: { Vector3 }): number?
+	if #spawns == 0 then return nil end
+	if #enemies == 0 then
+		return math.random(1, #spawns)
+	end
+	local bestIndex = 1
+	local bestDistance = -1
+	for index, spawn in spawns do
+		local nearest = math.huge
+		for _, enemy in enemies do
+			local distance = (enemy - spawn).Magnitude
+			if distance < nearest then
+				nearest = distance
+			end
+		end
+		if nearest > bestDistance then
+			bestDistance = nearest
+			bestIndex = index
+		end
+	end
+	return bestIndex
+end
+
+-- Where every live combatant stands (the InRound tag: Safe players and bots), `exclude` left out.
+local function combatantPositions(exclude: Model?): { Vector3 }
+	local positions: { Vector3 } = {}
+	for _, tagged in CollectionService:GetTagged(Constants.IN_ROUND_TAG) do
+		local model: Instance? = tagged
+		if tagged:IsA("Player") then
+			model = tagged.Character
+		end
+		if not model or model == exclude then continue end
+		local root = model:FindFirstChild("HumanoidRootPart")
+		if root and root:IsA("BasePart") then
+			table.insert(positions, root.Position)
+		end
+	end
+	return positions
+end
+
+-- The spawn point farthest from every live combatant but `exclude`.
+function MapManager.spawnCFrameAwayFrom(exclude: Model?): CFrame?
+	local spawns = getCurrentSpawnPoints()
+	local spawnPositions: { Vector3 } = {}
+	for _, spawn in spawns do
+		table.insert(spawnPositions, spawn.Position)
+	end
+	local index = MapManager._pickSpawn(spawnPositions, combatantPositions(exclude))
+	if not index then return nil end
+	return spawns[index].CFrame
+end
+
 function MapManager.teleportToArena(player: Player)
-	local spawn = MapManager.randomSpawnCFrame()
+	local spawn = MapManager.spawnCFrameAwayFrom(player.Character)
 	if not spawn then
 		warn("MapManager: current map has no SpawnPoints: using fallback")
 		teleportTo(player, CFrame.new(0, 5, 0))

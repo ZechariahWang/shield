@@ -32,7 +32,7 @@ function CombatController.isCombatActive(): boolean
 	if localState ~= Constants.STATE_SAFE then
 		return false
 	end
-	return currentPhase == Constants.PHASE_REVEAL or currentPhase == Constants.PHASE_ROUND
+	return currentPhase == Constants.PHASE_ROUND
 end
 
 type Meter = { fill: GuiObject?, overlay: GuiObject?, tween: Tween? }

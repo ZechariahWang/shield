@@ -14,12 +14,19 @@ local BotBrain = require(script.Parent.BotBrain)
 -- rig with a generated name, a random avatar, the default pistol, the players'
 -- movement animations (BotAnimator) and a per-bot skill roll driving BotBrain.
 -- All combat goes through CombatSystem, so bots take and deal damage exactly
--- like players.
+-- like players. A bot is an identity (name and skill) that lasts the match: an
+-- eliminated bot's model is destroyed and a new one spawns RESPAWN_DELAY later
+-- under the same name, so its score carries on.
 local BotSystem = {}
 
 local BOTS_FOLDER_NAME = "Bots"
 
-local bots: { [Model]: BotBrain.Skill } = {}
+type Identity = { name: string, skill: BotBrain.Skill }
+
+local bots: { [Model]: Identity } = {}
+local running = false
+-- Bumped at every stop, so a respawn scheduled in one match never lands in the next.
+local generation = 0
 
 local function getFolder(): Folder
 	local existing = Workspace:FindFirstChild(BOTS_FOLDER_NAME)
@@ -55,67 +62,79 @@ function BotSystem.plannedCount(): number
 	return Constants.BOT_COUNT
 end
 
--- Bots still standing in the current round, by model name.
-function BotSystem.aliveNames(): { string }
-	local names: { string } = {}
-	for char in bots do
-		table.insert(names, char.Name)
+-- One life of a bot: a fresh model on the spawn point farthest from everyone,
+-- spawn protected, with a brain at once when the match is already running.
+local function spawnBot(identity: Identity)
+	local rig = findRig()
+	local cframe = MapManager.spawnCFrameAwayFrom(nil)
+	if not rig or not cframe then return end
+	local char = rig:Clone()
+	char.Name = identity.name
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if hum then
+		hum.BreakJointsOnDeath = false
+		hum.WalkSpeed = Constants.SAFE_WALKSPEED
+		hum.DisplayName = identity.name
 	end
-	table.sort(names)
-	return names
+	char:PivotTo(cframe + Vector3.new(0, 4, 0))
+	CollectionService:AddTag(char, Constants.IN_ROUND_TAG)
+	char.Parent = getFolder()
+	bots[char] = identity
+	CombatSystem.registerBot(char)
+	CombatSystem.protect(char)
+	WeaponModel.attach(char, Constants.VIEWMODEL_DEFAULT_WEAPON)
+	BotAnimator.attach(char)
+	BotAppearance.apply(char)
+	if running then
+		BotBrain.add(char, identity.skill)
+	end
 end
 
+-- An eliminated bot: the model goes, the identity comes back after RESPAWN_DELAY.
 function BotSystem.remove(char: Model)
+	local identity = bots[char]
 	bots[char] = nil
 	BotBrain.remove(char)
 	BotAnimator.detach(char)
 	CombatSystem.unregisterBot(char)
 	char:Destroy()
+	if not identity or not running then return end
+
+	local scheduledIn = generation
+	task.delay(Constants.RESPAWN_DELAY, function()
+		if running and generation == scheduledIn then
+			spawnBot(identity)
+		end
+	end)
 end
 
--- Clone the rigs onto spawn points. Called at Reveal so bots are visible during positioning.
+-- Rolls the match's bots (names and skills) and spawns each one's first life.
 function BotSystem.spawn()
 	if BotSystem.plannedCount() == 0 then return end
-	local rig = findRig()
-	if not rig then
+	if not findRig() then
 		warn("BotSystem: rig not found at ReplicatedStorage." .. table.concat(Constants.BOT_RIG_PATH, "."))
 		return
 	end
-	local folder = getFolder()
 	local taken: { [string]: boolean } = {}
 	for _ = 1, BotSystem.plannedCount() do
-		local cframe = MapManager.randomSpawnCFrame()
-		if not cframe then break end
-		local char = rig:Clone()
 		local name = BotAppearance.randomName(taken)
 		taken[name] = true
-		char.Name = name
-		local hum = char:FindFirstChildOfClass("Humanoid")
-		if hum then
-			hum.BreakJointsOnDeath = false
-			hum.WalkSpeed = Constants.SAFE_WALKSPEED
-			hum.DisplayName = name
-		end
-		char:PivotTo(cframe + Vector3.new(0, 4, 0))
-		CollectionService:AddTag(char, Constants.IN_ROUND_TAG)
-		char.Parent = folder
-		bots[char] = BotBrain._rollSkill()
-		CombatSystem.registerBot(char)
-		WeaponModel.attach(char, Constants.VIEWMODEL_DEFAULT_WEAPON)
-		BotAnimator.attach(char)
-		BotAppearance.apply(char)
+		spawnBot({ name = name, skill = BotBrain._rollSkill() })
 	end
 end
 
 function BotSystem.start()
-	for char, skill in bots do
-		BotBrain.add(char, skill)
+	running = true
+	for char, identity in bots do
+		BotBrain.add(char, identity.skill)
 	end
 end
 
 -- Stops the brains but leaves the models standing so a victim's kill cam can
 -- keep tracking its bot through the arena freeze; despawn() removes them.
 function BotSystem.stop()
+	running = false
+	generation += 1
 	BotBrain.clear()
 	for char in bots do
 		CombatSystem.unregisterBot(char)

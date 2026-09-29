@@ -19,7 +19,6 @@ local activeKind: string? = nil
 local gen = 0
 local localState: string = Constants.STATE_LOBBY
 local currentPhase: string = Constants.PHASE_LOBBY
-local playerStates: { [Player]: string } = {}
 
 local ENTRANCE_TIME = 0.3
 local EXIT_TIME = 0.5
@@ -99,7 +98,7 @@ local function playEliminated()
 
 	titleLabel.Text = "ELIMINATED"
 	titleLabel.TextColor3 = Constants.WHITE
-	infoLabel.Text = "SPECTATING"
+	infoLabel.Text = "PRESS SPAWN"
 	infoLabel.TextColor3 = Constants.TAGGER_COLOR
 	infoLabel.Position = cachedInfoPosition
 	infoLabel.TextTransparency = 0
@@ -140,28 +139,15 @@ function ChangeIndicatorController.init()
 		currentPhase = phase
 	end)
 
+	-- Every death during a match plays the banner: the match goes on and the player can spawn back in.
 	PlayerStateRemote.OnClientEvent:Connect(function(player: Player, state: string)
-		playerStates[player] = state
 		if player ~= localPlayer then return end
 		local prev = localState
 		localState = state
 		if prev ~= Constants.STATE_SAFE or state == Constants.STATE_SAFE then return end
 		if currentPhase ~= Constants.PHASE_ROUND then return end
 
-		local othersStillSafe = false
-		for p, s in playerStates do
-			if p ~= localPlayer and p.Parent and s == Constants.STATE_SAFE then
-				othersStillSafe = true
-				break
-			end
-		end
-		if not othersStillSafe then return end
-
 		task.spawn(playEliminated)
-	end)
-
-	Players.PlayerRemoving:Connect(function(player)
-		playerStates[player] = nil
 	end)
 end
 

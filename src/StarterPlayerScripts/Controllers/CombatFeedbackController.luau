@@ -145,7 +145,7 @@ local currentPhase: string = Constants.PHASE_LOBBY
 
 local function shouldCombatModeBeActive(): boolean
 	if localState ~= Constants.STATE_SAFE then return false end
-	return currentPhase == Constants.PHASE_REVEAL or currentPhase == Constants.PHASE_ROUND
+	return currentPhase == Constants.PHASE_ROUND
 end
 
 local function resetCrosshair()

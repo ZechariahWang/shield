@@ -155,9 +155,9 @@ function AbilityHUDController.triggerCooldown(abilityId: string)
 	tween:Play()
 end
 
--- Matches the meters: the tile shows through the Reveal countdown too.
+-- Shown on the same rule as the meters.
 local function isInGame(): boolean
-	local inCombatPhase = currentPhase == Constants.PHASE_ROUND or currentPhase == Constants.PHASE_REVEAL
+	local inCombatPhase = currentPhase == Constants.PHASE_ROUND
 	if not inCombatPhase then return false end
 	return localState == Constants.STATE_SAFE
 end

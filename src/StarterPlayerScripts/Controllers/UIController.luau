@@ -1,7 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 
@@ -21,7 +20,6 @@ local endExtra: any = nil
 local playerStates: { [Player]: string } = {}
 
 local WHITE = Color3.fromRGB(240, 240, 240)
-local YELLOW = Color3.fromRGB(255, 159, 80)
 local RED = Color3.fromRGB(255, 25, 0)
 local GREEN = Color3.fromRGB(80, 220, 80)
 local CYAN = Color3.fromRGB(120, 220, 255)
@@ -54,64 +52,46 @@ local function formatTime(seconds: number): string
 	return string.format("%d:%02d", m, s)
 end
 
+-- The scores replicate as attributes on ReplicatedStorage.MatchScores (see MatchScore on the server).
+local function scoreAttribute(name: string): any
+	local folder = ReplicatedStorage:FindFirstChild("MatchScores")
+	if not folder then return nil end
+	return folder:GetAttribute(name)
+end
+
 local function buildMainText(): string
 	if currentPhase == Constants.PHASE_LOBBY then
 		return colorize(WHITE, "WAITING FOR PLAYERS...")
-	elseif currentPhase == Constants.PHASE_INTERMISSION then
-		return colorize(YELLOW, "GET READY!")
-	elseif currentPhase == Constants.PHASE_REVEAL then
-		return colorize(YELLOW, "GET READY!")
 	elseif currentPhase == Constants.PHASE_ROUND then
-		return colorize(WHITE, "LAST ONE STANDING")
+		local leaderName = scoreAttribute("LeaderName")
+		local leaderKills = scoreAttribute("LeaderKills")
+		if typeof(leaderName) == "string" and typeof(leaderKills) == "number" then
+			return colorize(WHITE, string.format("%s LEADS %d", string.upper(leaderName), leaderKills))
+		end
+		return colorize(WHITE, string.format("FIRST TO %d", Constants.KILL_TARGET))
 	elseif currentPhase == Constants.PHASE_END then
 		if endExtra and typeof(endExtra) == "table" then
 			local winners = endExtra.winners
-			if typeof(winners) == "table" and #winners > 0 then
-				if #winners == 1 then
-					return colorize(GREEN, string.upper(winners[1]) .. " SURVIVED!")
-				elseif #winners == 2 then
-					return colorize(GREEN, string.upper(winners[1]) .. " AND " .. string.upper(winners[2]) .. " SURVIVED!")
-				else
-					return colorize(GREEN, string.format("%d PLAYERS SURVIVED!", #winners))
-				end
+			if typeof(winners) == "table" and typeof(winners[1]) == "string" then
+				return colorize(GREEN, string.upper(winners[1]) .. " WINS!")
 			end
 		end
-		return colorize(WHITE, "ROUND ENDED")
+		return colorize(WHITE, "MATCH ENDED")
 	end
 	return ""
 end
 
--- Bots count as players: the ones planned for the round before it starts, the ones
--- still standing (models under Workspace.Bots) during it.
+-- Bots count as players toward the minimum a match needs.
 local function plannedBots(): number
 	if not Constants.BOTS_ENABLED then return 0 end
 	return Constants.BOT_COUNT
 end
 
-local function aliveBots(): number
-	local folder = Workspace:FindFirstChild("Bots")
-	if not folder then return 0 end
-	return #folder:GetChildren()
-end
-
--- Returns (left, right). Right is only used during Round (the alive count).
+-- Returns (left, right). Right is only used during Round (the local player's kills).
 local function buildSecondaryText(): (string, string)
 	if currentPhase == Constants.PHASE_LOBBY then
 		local lobbyCount = countByState(Constants.STATE_LOBBY) + plannedBots()
 		return colorize(CREAM, string.format("PLAYERS %d/%d", lobbyCount, Constants.MIN_PLAYERS)), ""
-	elseif currentPhase == Constants.PHASE_INTERMISSION then
-		if phaseEndTime > 0 then
-			local remaining = math.max(0, phaseEndTime - os.time())
-			local color = if remaining <= 3 then RED else CREAM
-			return colorize(color, string.format("STARTING IN %d", math.ceil(remaining))), ""
-		end
-		return "", ""
-	elseif currentPhase == Constants.PHASE_REVEAL then
-		if phaseEndTime > 0 then
-			local remaining = math.max(0, phaseEndTime - os.time())
-			return colorize(YELLOW, string.format("POSITION YOURSELF %d", math.ceil(remaining))), ""
-		end
-		return colorize(YELLOW, "POSITION YOURSELF"), ""
 	elseif currentPhase == Constants.PHASE_ROUND then
 		local left = ""
 		if phaseEndTime > 0 then
@@ -119,9 +99,11 @@ local function buildSecondaryText(): (string, string)
 			local color = if remaining <= 30 then RED else CREAM
 			left = colorize(color, formatTime(remaining))
 		end
-		local safeCount = countByState(Constants.STATE_SAFE) + aliveBots()
-		local totalCount = countByState(Constants.STATE_SAFE) + countByState(Constants.STATE_LOBBY) + plannedBots()
-		return left, colorize(CREAM, string.format("ALIVE %d/%d", safeCount, totalCount))
+		local kills = scoreAttribute("Kills_" .. localPlayer.Name)
+		if typeof(kills) ~= "number" then
+			kills = 0
+		end
+		return left, colorize(CREAM, string.format("KILLS %d/%d", kills, Constants.KILL_TARGET))
 	end
 	return "", ""
 end

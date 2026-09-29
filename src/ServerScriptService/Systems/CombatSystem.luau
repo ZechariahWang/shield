@@ -319,6 +319,24 @@ local function breakShield(victim: Model, shooter: Model)
 	end
 end
 
+local SPAWN_PROTECTION_NAME = "SpawnProtection"
+
+local function removeProtection(char: Model)
+	local protection = char:FindFirstChild(SPAWN_PROTECTION_NAME)
+	if protection then
+		protection:Destroy()
+	end
+end
+
+-- A visible ForceField marks the protected window; shoot() checks for it by name.
+local function protect(char: Model)
+	removeProtection(char)
+	local protection = Instance.new("ForceField")
+	protection.Name = SPAWN_PROTECTION_NAME
+	protection.Parent = char
+	Debris:AddItem(protection, Constants.SPAWN_PROTECTION_TIME)
+end
+
 local function clearShieldSilently(char: Model)
 	removeShieldPart(char)
 	shields[char] = newShieldState()
@@ -429,6 +447,7 @@ local function shoot(shooter: Model, origin: any, direction: any, hitPart: any, 
 	if (origin - head.Position).Magnitude > Constants.PISTOL_ORIGIN_TOLERANCE then return end
 
 	s.lastShotAt = now
+	removeProtection(shooter)
 
 	local aim = direction.Unit
 	local victim = validateClaim(shooter, origin, hitPart, hitPosition)
@@ -457,6 +476,7 @@ local function shoot(shooter: Model, origin: any, direction: any, hitPart: any, 
 
 	local victimHum = getHumanoid(victim)
 	if not victimHum or victimHum.Health <= 0 then return end
+	if victim:FindFirstChild(SPAWN_PROTECTION_NAME) then return end
 
 	local victimState = getState(victim)
 	if victimState.up then
@@ -540,6 +560,19 @@ end
 -- A manual lower, with the cooldown, like a player pressing the key again.
 function CombatSystem.lowerShield(char: Model)
 	lowerShield(char, true)
+end
+
+-- A player who spawns back in brings the same character: clear its eliminated
+-- mark and shield state, or it could neither shoot nor be hit.
+function CombatSystem.revive(char: Model)
+	eliminatedChars[char] = nil
+	clearShieldSilently(char)
+	sendShieldStatus(char, Constants.SHIELD_READY, 0, 0)
+end
+
+-- Spawn protection: no damage for SPAWN_PROTECTION_TIME, ended early by shooting.
+function CombatSystem.protect(char: Model)
+	protect(char)
 end
 
 function CombatSystem.registerBot(char: Model)

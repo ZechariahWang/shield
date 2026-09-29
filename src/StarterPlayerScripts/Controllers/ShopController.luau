@@ -601,7 +601,7 @@ function ShopController.registerModal(frame: Frame): () -> ()
 end
 
 -- The lobby UI exists only for players standing in the lobby: the state flips to
--- Lobby on elimination and after the round-end teleport, and to Safe at Reveal.
+-- Lobby on elimination and after the round-end teleport, and to Safe on a spawn.
 local function reconcileLobbyUI()
 	local inLobby = localState == Constants.STATE_LOBBY
 	lobbyButtons.Visible = inLobby

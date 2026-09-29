@@ -44,7 +44,7 @@ local function bindToggle(button: TextButton, apply: (boolean) -> ())
 end
 
 local function reconcile()
-	local inArena = currentPhase == Constants.PHASE_REVEAL or currentPhase == Constants.PHASE_ROUND
+	local inArena = currentPhase == Constants.PHASE_ROUND
 	frame.Visible = isTouchDevice() and inArena and localState == Constants.STATE_SAFE
 	dashButton.Visible = AbilityHUDController.equippedAbility() == "Dash"
 	if not frame.Visible then

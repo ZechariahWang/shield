@@ -1,23 +1,18 @@
 local Constants = {}
 
--- ROUND
-Constants.MIN_PLAYERS = 2
-Constants.INTERMISSION_TIME = 10
-Constants.REVEAL_TIME = 10 -- pre-round positioning grace. No damage, no abilities.
-Constants.ROUND_TIME = 90
+-- MATCH (free-for-all deathmatch: killed players return to the lobby and spawn back in)
+Constants.MIN_PLAYERS = 2                 -- players plus planned bots needed for a match
+Constants.ROUND_TIME = 300                -- seconds a match lasts unless the kill target ends it
+Constants.KILL_TARGET = 20                -- the first combatant to this many kills wins
+Constants.RESPAWN_DELAY = 3               -- seconds from a death to the next spawn, players and bots (the kill cam's length)
+Constants.SPAWN_PROTECTION_TIME = 2       -- seconds a fresh spawn cannot be hurt; shooting ends it early
 Constants.END_DELAY_TIME = 3 -- post-round freeze: players stay in arena, invincible, abilities/shooting off, before teleport to lobby
 Constants.END_TIME = 5
 
--- TEST MODE (solo playtesting). Rounds start with one player, the timer and
--- last-standing checks are off, and the round ends when a Safe player touches
--- a part named TEST_END_WALL in the loaded map (or when no real player is Safe).
-Constants.TEST_MODE = false
-Constants.TEST_END_WALL = "ShortWall"
-
 -- BOTS (server-driven combatants cloned from ReplicatedStorage.Assets.Rigs.NPC).
--- They count as players: toward MIN_PLAYERS, the alive count and the last-standing win.
+-- They count as players: toward MIN_PLAYERS, on the scoreboard and for the win.
 Constants.BOTS_ENABLED = true
-Constants.BOT_COUNT = 5                   -- spawned at Reveal while BOTS_ENABLED, removed at round end
+Constants.BOT_COUNT = 5                   -- fielded for the whole match while BOTS_ENABLED; each respawns after RESPAWN_DELAY
 Constants.BOT_RIG_PATH = { "Assets", "Rigs", "NPC" }
 Constants.BOT_WAYPOINT_TIMEOUT = 4        -- seconds before a stuck bot picks a new destination
 -- Per-bot skill, rolled uniformly inside each range at spawn (BotBrain._rollSkill).
@@ -132,8 +127,8 @@ Constants.MOVEMENT_RUN_REFERENCE_SPEED = 24   -- same for the run cycle (the spr
 Constants.MOVEMENT_ANIM_FADE = 0.15           -- seconds the movement blend eases between weights
 Constants.MOVEMENT_AIR_FADE = 0.05            -- same, while airborne or on the grapple: the walk and run cut out instead of trailing into the air
 Constants.PUSH_MAX_ACCEL = 6000               -- studs/s^2: MaxForce per unit of mass for the dash and grapple constraints. Finite, so a wall stops the character (an unlimited force fights the collision and launches it); under about 2000 a grounded humanoid holds the character in place
-Constants.GRAPPLE_RANGE = 120                 -- studs from the root to the anchor
-Constants.GRAPPLE_SPEED = 90                  -- studs per second along the rope at full pull
+Constants.GRAPPLE_RANGE = 400                 -- studs from the root to the anchor
+Constants.GRAPPLE_SPEED = 50                  -- studs per second along the rope at full pull
 Constants.GRAPPLE_ACCEL = 250                 -- studs/s^2 the pull ramps up by, from the speed already carried toward the anchor
 Constants.GRAPPLE_ARRIVE_DISTANCE = 6         -- studs from the anchor at which the rope lets go
 Constants.GRAPPLE_ARRIVE_SPEED = 30           -- studs per second the pull has braked to on arrival
@@ -142,7 +137,7 @@ Constants.GRAPPLE_STEER_SPEED = 35            -- studs per second across the rop
 Constants.GRAPPLE_MAX_TIME = 20              -- seconds before a rope lets go on its own
 Constants.GRAPPLE_STALL_SPEED = 4             -- studs per second: slower than this for GRAPPLE_STALL_TIME means something is in the way
 Constants.GRAPPLE_STALL_TIME = 0.3
-Constants.GRAPPLE_COOLDOWN = 0.5              -- seconds from a release to the next grapple
+Constants.GRAPPLE_COOLDOWN = 0.1              -- seconds from a release to the next grapple
 Constants.GRAPPLE_COOLDOWN_TOLERANCE = 0.2    -- server slack: cooldown seconds and range studs (the client stamps at send)
 Constants.GRAPPLE_ROPE_WIDTH = 0.15           -- studs
 Constants.GRAPPLE_ROPE_COLOR = Color3.fromRGB(235, 235, 235)
@@ -150,6 +145,7 @@ Constants.LEAN_MAX_ANGLE = 8                  -- degrees the torso tips toward t
 Constants.LEAN_RATE = 10                      -- exp-decay rate of the lean toward its target (server Heartbeat)
 
 -- RAGDOLL (a corpse clone left where a combatant was eliminated; only during Round, cleared with the map)
+Constants.RAGDOLL_LIFETIME = 15           -- seconds before a corpse is removed
 Constants.RAGDOLL_IMPULSE = 30            -- studs per second added away from the killer
 Constants.RAGDOLL_JOINT_LIMIT = 45        -- degrees each ball socket may swing
 Constants.RAGDOLL_DENSITY = 0.3           -- light enough that a corpse cannot shove a living player
@@ -188,16 +184,14 @@ Constants.SENSITIVITY_MAX = 4
 Constants.SENSITIVITY_STEP = 0.1
 
 -- PLAYER STATES
-Constants.STATE_LOBBY = "Lobby"     -- also used for eliminated players (spectating from the lobby)
+Constants.STATE_LOBBY = "Lobby"     -- in the lobby: between matches, before the first spawn, and after every death
 Constants.STATE_SAFE = "Safe"       -- alive in the arena
 Constants.IN_ROUND_TAG = "InRound"  -- CollectionService tag on every Safe Player and every live bot Model
 
 -- ROUND PHASES
-Constants.PHASE_LOBBY = "Lobby"
-Constants.PHASE_INTERMISSION = "Intermission"
-Constants.PHASE_REVEAL = "Reveal"
-Constants.PHASE_ROUND = "Round"
-Constants.PHASE_END = "End"
+Constants.PHASE_LOBBY = "Lobby"     -- waiting for enough players
+Constants.PHASE_ROUND = "Round"     -- the match
+Constants.PHASE_END = "End"         -- arena freeze, then the results in the lobby
 
 -- UI COLORS
 Constants.SURVIVOR_COLOR = Color3.fromRGB(27, 180, 32)   -- #1BB420
@@ -219,8 +213,8 @@ Constants.SHIELD_COOLDOWN_STATUS = "Cooldown"
 Constants.SHIELD_READY = "Ready"
 
 -- END REASONS
-Constants.REASON_SURVIVED = "Survived"
-Constants.REASON_LAST_STANDING = "LastStanding"
+Constants.REASON_KILL_TARGET = "KillTarget"
+Constants.REASON_TIME_UP = "TimeUp"
 Constants.REASON_ABORTED = "Aborted"
 
 return Constants
