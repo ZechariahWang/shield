@@ -130,6 +130,7 @@ Constants.JUMP_ANIMATION = "rbxassetid://94756604871926"  -- one-shot Action pri
 Constants.MOVEMENT_ANIM_REFERENCE_SPEED = 16  -- studs per second the walk cycles are authored for; playback speed scales from this
 Constants.MOVEMENT_RUN_REFERENCE_SPEED = 24   -- same for the run cycle (the sprint speed)
 Constants.MOVEMENT_ANIM_FADE = 0.15           -- seconds the movement blend eases between weights
+Constants.PUSH_MAX_ACCEL = 6000               -- studs/s^2: MaxForce per unit of mass for the dash and grapple constraints. Finite, so a wall stops the character (an unlimited force fights the collision and launches it); under about 2000 a grounded humanoid holds the character in place
 Constants.LEAN_MAX_ANGLE = 8                  -- degrees the torso tips toward the movement direction at full input
 Constants.LEAN_RATE = 10                      -- exp-decay rate of the lean toward its target (server Heartbeat)
 

@@ -54,12 +54,17 @@ local function dash(player: Player)
 	attachment.Name = "DashAttachment"
 	attachment.Parent = root
 
+	-- Horizontal plane only, with a finite force: gravity still applies and a wall
+	-- stops the dash instead of the solver launching the character off it.
 	local lv = Instance.new("LinearVelocity")
 	lv.Name = "DashVelocity"
 	lv.Attachment0 = attachment
-	lv.MaxForce = math.huge
 	lv.RelativeTo = Enum.ActuatorRelativeTo.World
-	lv.VectorVelocity = horizontal * (params.velocity or 0)
+	lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
+	lv.PrimaryTangentAxis = Vector3.xAxis
+	lv.SecondaryTangentAxis = Vector3.zAxis
+	lv.MaxForce = root.AssemblyMass * Constants.PUSH_MAX_ACCEL
+	lv.PlaneVelocity = Vector2.new(horizontal.X, horizontal.Z) * (params.velocity or 0)
 	lv.Parent = root
 
 	task.delay(params.duration or 0, function()
