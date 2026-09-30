@@ -5,8 +5,8 @@ local Workspace = game:GetService("Workspace")
 local Constants = require(ReplicatedStorage.Shared.Constants)
 
 -- The in-match top kills board under the secondary status pill: one ringed
--- headshot per leading combatant, left to right, read from the Top attribute
--- on ReplicatedStorage.MatchScores.
+-- headshot per leading combatant with their kills under it, left to right, read
+-- from the Top and Kills_<name> attributes on ReplicatedStorage.MatchScores.
 local TopBoardController = {}
 
 local localPlayer = Players.LocalPlayer
@@ -72,6 +72,8 @@ function TopBoardController.refresh()
 		local ring = circle:FindFirstChild("Ring") :: UIStroke
 		local templateRing = template:FindFirstChild("Ring") :: UIStroke
 		ring.Color = if name == localPlayer.Name then Constants.TOP_BOARD_SELF_COLOR else templateRing.Color
+		local kills = circle:FindFirstChild("Kills") :: TextLabel
+		kills.Text = tostring(folder:GetAttribute("Kills_" .. name) or 0)
 	end
 	board.Visible = currentPhase == Constants.PHASE_ROUND
 end
