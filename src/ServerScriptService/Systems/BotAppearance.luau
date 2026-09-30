@@ -65,11 +65,15 @@ function BotAppearance.apply(char: Model)
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		if not hum then return end
 		for _ = 1, Constants.BOT_AVATAR_TRIES do
-			local ok, description = pcall(Players.GetHumanoidDescriptionFromUserId, Players, randomUserId())
+			local userId = randomUserId()
+			local ok, description = pcall(Players.GetHumanoidDescriptionFromUserId, Players, userId)
 			if ok and description then
 				if not char.Parent then return end
 				local applied = pcall(hum.ApplyDescription, hum, description)
-				if applied then return end
+				if applied then
+					char:SetAttribute("AvatarUserId", userId)
+					return
+				end
 			end
 		end
 	end)

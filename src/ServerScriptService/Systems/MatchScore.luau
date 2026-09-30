@@ -5,7 +5,8 @@ local Constants = require(ReplicatedStorage.Shared.Constants)
 -- Kills per combatant for the running match, keyed by name (a player's name, a
 -- bot's generated name). The scores replicate as attributes on the
 -- ReplicatedStorage.MatchScores folder: Kills_<name> per combatant plus
--- LeaderName and LeaderKills, so clients and late joiners need no remote.
+-- LeaderName and LeaderKills, and Top (the TOP_BOARD_SIZE leading names, comma
+-- joined), so clients and late joiners need no remote.
 local MatchScore = {}
 
 export type State = {
@@ -53,6 +54,24 @@ function MatchScore._leader(board: State): (string?, number)
 	return bestName, bestKills
 end
 
+-- The top n names: kills descending, a tie to whoever reached the count first.
+function MatchScore._top(board: State, n: number): { string }
+	local names: { string } = {}
+	for name in board.kills do
+		table.insert(names, name)
+	end
+	table.sort(names, function(a: string, b: string): boolean
+		if board.kills[a] ~= board.kills[b] then
+			return board.kills[a] > board.kills[b]
+		end
+		return board.reachedAt[a] < board.reachedAt[b]
+	end)
+	while #names > n do
+		table.remove(names)
+	end
+	return names
+end
+
 function MatchScore._targetReached(board: State): boolean
 	local _, kills = MatchScore._leader(board)
 	return kills >= Constants.KILL_TARGET
@@ -62,6 +81,7 @@ local function publishLeader()
 	local name, kills = MatchScore._leader(state)
 	folder:SetAttribute("LeaderName", name)
 	folder:SetAttribute("LeaderKills", kills)
+	folder:SetAttribute("Top", table.concat(MatchScore._top(state, Constants.TOP_BOARD_SIZE), ","))
 end
 
 function MatchScore.reset()

@@ -32,6 +32,18 @@ return function()
 	name, kills = MatchScore._leader(state)
 	assert(name == "Ann" and kills == 3, "ann passes bob")
 
+	-- The top n names: kills descending, a tie to whoever reached the count first.
+	local board = MatchScore._new()
+	MatchScore._addKill(board, "Ann")
+	MatchScore._addKill(board, "Bob")
+	MatchScore._addKill(board, "Bob")
+	MatchScore._addKill(board, "Cy")
+	local top = MatchScore._top(board, 5)
+	assert(#top == 3 and top[1] == "Bob" and top[2] == "Ann" and top[3] == "Cy", "top order")
+	local two = MatchScore._top(board, 2)
+	assert(#two == 2 and two[2] == "Ann", "top n cuts the list")
+	assert(#MatchScore._top(MatchScore._new(), 5) == 0, "empty top")
+
 	-- The target flips exactly at KILL_TARGET.
 	local race = MatchScore._new()
 	for _ = 1, Constants.KILL_TARGET - 1 do
