@@ -62,7 +62,9 @@ local function makePull(root: BasePart): LinearVelocity
 	return velocity
 end
 
-local function release()
+-- `launchDirection` is set only when the pull arrived: the character then
+-- carries on past the anchor instead of stopping at it.
+local function release(launchDirection: Vector3?)
 	if not anchor then return end
 	anchor = nil
 	stalledSince = nil
@@ -72,7 +74,9 @@ local function release()
 		pull = nil
 	end
 	local root = getRoot()
-	if root then
+	if root and launchDirection then
+		root.AssemblyLinearVelocity = GrappleMath.launchVelocity(root.AssemblyLinearVelocity, launchDirection)
+	elseif root then
 		root.AssemblyLinearVelocity = GrappleMath.clampSpeed(root.AssemblyLinearVelocity, Constants.GRAPPLE_SPEED)
 	end
 	GrappleReleaseRemote:FireServer()
@@ -168,11 +172,15 @@ local function step()
 	end
 	local offset = point - root.Position
 	local distance = offset.Magnitude
-	if distance <= Constants.GRAPPLE_ARRIVE_DISTANCE or isStalled(root, now) then
+	local direction = offset.Unit
+	if distance <= Constants.GRAPPLE_ARRIVE_DISTANCE then
+		release(direction)
+		return
+	end
+	if isStalled(root, now) then
 		release()
 		return
 	end
-	local direction = offset.Unit
 	local along = direction * GrappleMath.pullSpeed(startSpeed, elapsed, distance)
 	pull.VectorVelocity = along + steering(root, direction)
 end

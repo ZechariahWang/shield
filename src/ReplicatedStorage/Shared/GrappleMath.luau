@@ -43,6 +43,14 @@ function GrappleMath.steer(direction: Vector3, right: Vector3, sideways: number,
 	return across * Constants.GRAPPLE_STEER_SPEED
 end
 
+-- The velocity to leave an arrived pull with: the carried velocity plus
+-- GRAPPLE_LAUNCH_SPEED along the rope and GRAPPLE_LAUNCH_LIFT upward, capped
+-- at the pull speed plus the launch speed. `direction` is the unit vector to the anchor.
+function GrappleMath.launchVelocity(velocity: Vector3, direction: Vector3): Vector3
+	local launched = velocity + direction * Constants.GRAPPLE_LAUNCH_SPEED + Vector3.yAxis * Constants.GRAPPLE_LAUNCH_LIFT
+	return GrappleMath.clampSpeed(launched, Constants.GRAPPLE_SPEED + Constants.GRAPPLE_LAUNCH_SPEED)
+end
+
 -- The velocity with its speed capped; a non-finite velocity becomes zero.
 function GrappleMath.clampSpeed(velocity: Vector3, maxSpeed: number): Vector3
 	if not isFiniteVector(velocity) then return Vector3.zero end

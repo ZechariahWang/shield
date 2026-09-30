@@ -66,5 +66,15 @@ return function()
 	assert(GrappleMath.clampSpeed(Vector3.zero, 50) == Vector3.zero, "zero velocity")
 	assert(GrappleMath.clampSpeed(Vector3.new(0 / 0, 0, 0), 50) == Vector3.zero, "nan velocity is dropped")
 
+	-- Arrival launch: the carried velocity keeps going along the rope, past the anchor, with a lift.
+	local arriving = Vector3.new(0, 0, -Constants.GRAPPLE_ARRIVE_SPEED)
+	local launch = GrappleMath.launchVelocity(arriving, ahead)
+	assert(near(launch.Z, -(Constants.GRAPPLE_ARRIVE_SPEED + Constants.GRAPPLE_LAUNCH_SPEED)), "boost along the rope")
+	assert(near(launch.Y, Constants.GRAPPLE_LAUNCH_LIFT), "lift on arrival")
+	assert(near(launch.X, 0), "nothing sideways")
+	local capped = GrappleMath.launchVelocity(Vector3.new(0, 0, -500), ahead)
+	assert(near(capped.Magnitude, Constants.GRAPPLE_SPEED + Constants.GRAPPLE_LAUNCH_SPEED), "launch speed is capped")
+	assert(GrappleMath.launchVelocity(Vector3.new(0 / 0, 0, 0), ahead) == Vector3.zero, "nan velocity launches nothing")
+
 	print("GrappleTest: all checks passed")
 end
