@@ -529,6 +529,19 @@ local function updateScrim()
 	tween:Play()
 end
 
+-- Fired with the open modal's frame name, or nil once none is open.
+ShopController.ModalChanged = Instance.new("BindableEvent")
+
+local function notifyModal()
+	for _, modal in modals do
+		if modal.open then
+			ShopController.ModalChanged:Fire(modal.frame.Name)
+			return
+		end
+	end
+	ShopController.ModalChanged:Fire(nil)
+end
+
 local function setModalOpen(modal: Modal, open: boolean)
 	if modal.open == open then return end
 	modal.open = open
@@ -536,6 +549,7 @@ local function setModalOpen(modal: Modal, open: boolean)
 	local gen = modal.animGen
 	local frame = modal.frame
 	updateScrim()
+	notifyModal()
 
 	if open then
 		frame.Visible = true

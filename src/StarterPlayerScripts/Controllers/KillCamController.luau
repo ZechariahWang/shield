@@ -27,7 +27,14 @@ local function frameKiller(head: BasePart, fromPosition: Vector3): CFrame
 	return CFrame.lookAt(eye, head.Position)
 end
 
+local playing = false
+
+function KillCamController.isPlaying(): boolean
+	return playing
+end
+
 local function restoreCamera()
+	playing = false
 	local camera = Workspace.CurrentCamera
 	if not camera then return end
 	camera.CameraType = Enum.CameraType.Custom
@@ -50,6 +57,7 @@ function KillCamController.play(killerCharacter: Model)
 	local startedAt = os.clock()
 
 	camera.CameraType = Enum.CameraType.Scriptable
+	playing = true
 
 	local connection: RBXScriptConnection
 	connection = RunService.RenderStepped:Connect(function()

@@ -8,6 +8,7 @@ Constants.TOP_BOARD_SIZE = 5              -- names on the in-match top kills boa
 Constants.TOP_BOARD_SELF_COLOR = Color3.fromRGB(255, 159, 80) -- the ring around the local player's headshot on the top board
 Constants.TOP_BOARD_AVATAR_RETRY = 2          -- seconds before the top board looks a missing avatar up again
 Constants.RESPAWN_DELAY = 3               -- seconds from a death to the next spawn, players and bots (the kill cam's length)
+Constants.MENU_CAMERA_TWEEN_TIME = 0.8       -- seconds the lobby menu camera takes to move between views
 Constants.SPAWN_PROTECTION_TIME = 2       -- seconds a fresh spawn cannot be hurt; shooting ends it early
 Constants.END_DELAY_TIME = 3 -- post-round freeze: players stay in arena, invincible, abilities/shooting off, before teleport to lobby
 Constants.END_TIME = 5

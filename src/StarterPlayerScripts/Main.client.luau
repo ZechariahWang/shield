@@ -24,6 +24,7 @@ local SpawnController = require(Controllers.SpawnController)
 local MobileControlsController = require(Controllers.MobileControlsController)
 local TopBoardController = require(Controllers.TopBoardController)
 local ScoreboardController = require(Controllers.ScoreboardController)
+local MenuCameraController = require(Controllers.MenuCameraController)
 
 AbilityHUDController.init()
 DashController.init()
@@ -46,6 +47,7 @@ SpawnController.init()
 MobileControlsController.init()
 TopBoardController.init()
 ScoreboardController.init()
+MenuCameraController.init()
 
 -- Every controller is listening now: ask the server for the current phase and
 -- player state, since the broadcasts sent while this client was loading are gone.
