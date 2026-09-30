@@ -75,6 +75,8 @@ function SpawnController.init()
 		currentPhase = phase
 	end)
 
+	-- The button is authored visible so it sits in its slot in the Studio viewport; hidden from here on until a match.
+	refresh()
 	RunService.Heartbeat:Connect(refresh)
 end
 
