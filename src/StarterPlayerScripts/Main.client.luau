@@ -46,3 +46,7 @@ SpawnController.init()
 MobileControlsController.init()
 TopBoardController.init()
 ScoreboardController.init()
+
+-- Every controller is listening now: ask the server for the current phase and
+-- player state, since the broadcasts sent while this client was loading are gone.
+ReplicatedStorage.Remotes.RoundStateChanged:FireServer()

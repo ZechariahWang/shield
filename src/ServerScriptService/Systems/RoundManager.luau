@@ -327,6 +327,13 @@ function RoundManager.init()
 
 	CombatSystem.PlayerEliminated:Connect(onPlayerEliminated)
 	SpawnRequestRemote.OnServerEvent:Connect(spawnIntoArena)
+	-- A client fires the phase remote with no arguments once every controller is
+	-- listening: a live client loads slowly enough to miss the match-start
+	-- broadcast and the character-spawn sync.
+	RoundStateRemote.OnServerEvent:Connect(function(player: Player)
+		syncPhaseTo(player)
+		PlayerState.syncTo(player)
+	end)
 
 	Players.PlayerAdded:Connect(bindPlayer)
 	Players.PlayerRemoving:Connect(function(player)
