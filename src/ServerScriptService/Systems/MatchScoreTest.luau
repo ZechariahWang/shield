@@ -44,6 +44,17 @@ return function()
 	assert(#two == 2 and two[2] == "Ann", "top n cuts the list")
 	assert(#MatchScore._top(MatchScore._new(), 5) == 0, "empty top")
 
+	-- Deaths count per name and never touch the kills or the lead.
+	local deaths = MatchScore._new()
+	MatchScore._addKill(deaths, "Ann")
+	MatchScore._addDeath(deaths, "Ann")
+	MatchScore._addDeath(deaths, "Bob")
+	MatchScore._addDeath(deaths, "Bob")
+	assert(MatchScore._deaths(deaths, "Ann") == 1 and MatchScore._deaths(deaths, "Bob") == 2, "deaths per name")
+	assert(MatchScore._deaths(deaths, "Cy") == 0, "unknown name has no deaths")
+	assert(MatchScore._kills(deaths, "Bob") == 0, "a death is not a kill")
+	assert(MatchScore._leader(deaths) == "Ann", "deaths do not change the lead")
+
 	-- The target flips exactly at KILL_TARGET.
 	local race = MatchScore._new()
 	for _ = 1, Constants.KILL_TARGET - 1 do

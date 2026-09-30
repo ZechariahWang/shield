@@ -17,7 +17,10 @@ export type Record = {
 	owned: { [string]: { string } },
 	equipped: { [string]: string },
 	settings: Settings.Record,
+	stats: { [string]: number }, -- lifetime kills and deaths
 }
+
+Store.STAT_KEYS = { "kills", "deaths" }
 
 type Prices = { [string]: { [string]: number } }
 
@@ -67,9 +70,19 @@ function Store._merge(raw: any, known: Prices): Record
 		owned = {},
 		equipped = {},
 		settings = Settings.merge(nil),
+		stats = {},
 	}
 	if typeof(raw) ~= "table" then raw = {} end
 	record.settings = Settings.merge(raw.settings)
+	local rawStats = if typeof(raw.stats) == "table" then raw.stats else {}
+	for _, key in Store.STAT_KEYS do
+		local value = rawStats[key]
+		if typeof(value) == "number" and value >= 0 then
+			record.stats[key] = math.floor(value)
+		else
+			record.stats[key] = 0
+		end
+	end
 	if typeof(raw.coins) == "number" and raw.coins >= 0 then
 		record.coins = math.floor(raw.coins)
 	end
@@ -120,6 +133,10 @@ function Store._equip(record: Record, kind: any, name: any): boolean
 	if not owned or not table.find(owned, name) then return false end
 	record.equipped[kind] = name
 	return true
+end
+
+function Store._addStat(record: Record, key: string)
+	record.stats[key] += 1
 end
 
 -- Persistence.
@@ -245,6 +262,14 @@ function Store.addCoins(player: Player, amount: number)
 	wallet.record.coins += amount
 	markDirty(wallet)
 	sendState(player)
+end
+
+-- One more lifetime kill or death (a STAT_KEYS name); a wallet still loading drops it.
+function Store.addStat(player: Player, key: string)
+	local wallet = wallets[player]
+	if not wallet or not wallet.record then return end
+	Store._addStat(wallet.record, key)
+	markDirty(wallet)
 end
 
 local function purchase(player: Player, kind: any, name: any)

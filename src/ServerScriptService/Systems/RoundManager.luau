@@ -255,9 +255,11 @@ local function onPlayerEliminated(victim: Model, killer: Model?)
 	if killerName then
 		MatchScore.addKill(killerName)
 	end
+	MatchScore.addDeath(combatantName(victim))
 	local killerPlayer = if killer then Players:GetPlayerFromCharacter(killer) else nil
 	if killerPlayer then
 		Store.addCoins(killerPlayer, Constants.SHOP_COINS_PER_KILL)
+		Store.addStat(killerPlayer, "kills")
 	end
 
 	-- Before the teleport so the corpse lands where they died.
@@ -265,6 +267,7 @@ local function onPlayerEliminated(victim: Model, killer: Model?)
 
 	local victimPlayer = Players:GetPlayerFromCharacter(victim)
 	if victimPlayer then
+		Store.addStat(victimPlayer, "deaths")
 		lastDeathAt[victimPlayer] = os.clock()
 		setLobby(victimPlayer)
 		MapManager.teleportToLobby(victimPlayer)

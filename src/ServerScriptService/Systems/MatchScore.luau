@@ -2,27 +2,29 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 
--- Kills per combatant for the running match, keyed by name (a player's name, a
--- bot's generated name). The scores replicate as attributes on the
--- ReplicatedStorage.MatchScores folder: Kills_<name> per combatant plus
+-- Kills and deaths per combatant for the running match, keyed by name (a
+-- player's name, a bot's generated name). The scores replicate as attributes on
+-- the ReplicatedStorage.MatchScores folder: Kills_<name> and Deaths_<name> per combatant plus
 -- LeaderName and LeaderKills, and Top (the TOP_BOARD_SIZE leading names, comma
 -- joined), so clients and late joiners need no remote.
 local MatchScore = {}
 
 export type State = {
 	kills: { [string]: number },
+	deaths: { [string]: number },
 	reachedAt: { [string]: number }, -- the kill number, match wide, that brought the name to its current count
 	sequence: number,
 }
 
 local FOLDER_NAME = "MatchScores"
 local KILLS_PREFIX = "Kills_"
+local DEATHS_PREFIX = "Deaths_"
 
 local state: State
 local folder: Folder
 
 function MatchScore._new(): State
-	return { kills = {}, reachedAt = {}, sequence = 0 }
+	return { kills = {}, deaths = {}, reachedAt = {}, sequence = 0 }
 end
 
 function MatchScore._addKill(board: State, name: string)
@@ -33,6 +35,14 @@ end
 
 function MatchScore._kills(board: State, name: string): number
 	return board.kills[name] or 0
+end
+
+function MatchScore._addDeath(board: State, name: string)
+	board.deaths[name] = (board.deaths[name] or 0) + 1
+end
+
+function MatchScore._deaths(board: State, name: string): number
+	return board.deaths[name] or 0
 end
 
 -- The top scorer and their kills, or nil and 0 when nobody has scored. A tie
@@ -96,6 +106,11 @@ function MatchScore.addKill(name: string)
 	MatchScore._addKill(state, name)
 	folder:SetAttribute(KILLS_PREFIX .. name, state.kills[name])
 	publishLeader()
+end
+
+function MatchScore.addDeath(name: string)
+	MatchScore._addDeath(state, name)
+	folder:SetAttribute(DEATHS_PREFIX .. name, state.deaths[name])
 end
 
 function MatchScore.leader(): (string?, number)

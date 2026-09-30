@@ -57,6 +57,7 @@ local function fetchAvatar(name: string)
 end
 
 function TopBoardController.refresh()
+	if not board then return end
 	local folder = ReplicatedStorage:FindFirstChild("MatchScores")
 	local top = if folder then folder:GetAttribute("Top") else nil
 	local names = if typeof(top) == "string" and top ~= "" then string.split(top, ",") else {}
@@ -82,17 +83,9 @@ function TopBoardController.refresh()
 end
 
 function TopBoardController.init()
-	local playerGui = localPlayer:WaitForChild("PlayerGui")
-	local gui = playerGui:WaitForChild("Game")
-	board = gui:WaitForChild("TopBoard")
-	template = gui:WaitForChild("ID_Objects"):WaitForChild("TopRow")
-	for index = 1, Constants.TOP_BOARD_SIZE do
-		local row = template:Clone()
-		row.LayoutOrder = index
-		row.Parent = board
-		rows[index] = row
-	end
-
+	-- The remote first: the server syncs the phase to a new character at the
+	-- moment the StarterGui copies land in PlayerGui, so waiting for the GUI
+	-- before listening can miss it.
 	local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 	local RoundStateRemote = Remotes:WaitForChild("RoundStateChanged") :: RemoteEvent
 	RoundStateRemote.OnClientEvent:Connect(function(phase: string)
@@ -102,6 +95,18 @@ function TopBoardController.init()
 		end
 		TopBoardController.refresh()
 	end)
+
+	local playerGui = localPlayer:WaitForChild("PlayerGui")
+	local gui = playerGui:WaitForChild("Game")
+	template = gui:WaitForChild("ID_Objects"):WaitForChild("TopRow")
+	local boardFrame = gui:WaitForChild("TopBoard") :: Frame
+	for index = 1, Constants.TOP_BOARD_SIZE do
+		local row = template:Clone()
+		row.LayoutOrder = index
+		row.Parent = boardFrame
+		rows[index] = row
+	end
+	board = boardFrame
 
 	local folder = ReplicatedStorage:WaitForChild("MatchScores")
 	folder.AttributeChanged:Connect(TopBoardController.refresh)

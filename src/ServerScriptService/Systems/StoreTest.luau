@@ -60,12 +60,25 @@ return function()
 	assert(fresh.settings.keybinds.Shoot == "MouseButton1", "fresh settings")
 	assert(garbage.settings.sensitivity == 1, "garbage settings")
 
+	-- Lifetime stats ride in the record: kept as non-negative integers, zero otherwise.
+	local withStats = Store._merge({ stats = { kills = 12, deaths = 7.9 } }, PRICES)
+	assert(withStats.stats.kills == 12 and withStats.stats.deaths == 7, "stats merged")
+	assert(fresh.stats.kills == 0 and fresh.stats.deaths == 0, "fresh stats")
+	local badStats = Store._merge({ stats = { kills = -3, deaths = "many" } }, PRICES)
+	assert(badStats.stats.kills == 0 and badStats.stats.deaths == 0, "garbage stats")
+	assert(garbage.stats.kills == 0, "missing stats")
+	Store._addStat(record, "kills")
+	Store._addStat(record, "kills")
+	Store._addStat(record, "deaths")
+	assert(record.stats.kills == 2 and record.stats.deaths == 1, "stats added")
+
 	-- The save table survives a merge round trip unchanged.
 	local again = Store._merge(record, PRICES)
 	assert(again.coins == record.coins, "round trip coins")
 	assert(#again.owned.Weapons == #record.owned.Weapons, "round trip owned")
 	assert(again.equipped.Weapons == record.equipped.Weapons, "round trip equipped")
 	assert(again.settings.keybinds.Shoot == record.settings.keybinds.Shoot, "round trip settings")
+	assert(again.stats.kills == 2 and again.stats.deaths == 1, "round trip stats")
 
 	print("StoreTest: all passed")
 end
