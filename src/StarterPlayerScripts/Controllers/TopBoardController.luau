@@ -4,15 +4,15 @@ local Workspace = game:GetService("Workspace")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 
--- The in-match top kills board under the secondary status pill: one row per
--- leading combatant (headshot, rank, name, kills), read from the Top and
--- Kills_<name> attributes on ReplicatedStorage.MatchScores.
+-- The in-match top kills board under the secondary status pill: one ringed
+-- headshot per leading combatant, left to right, read from the Top attribute
+-- on ReplicatedStorage.MatchScores.
 local TopBoardController = {}
 
 local localPlayer = Players.LocalPlayer
 local board: Frame
-local template: Frame
-local rows: { Frame } = {}
+local template: ImageLabel
+local circles: { ImageLabel } = {}
 local avatars: { [string]: string } = {}
 local currentPhase: string = Constants.PHASE_LOBBY
 
@@ -61,23 +61,17 @@ function TopBoardController.refresh()
 	local folder = ReplicatedStorage:FindFirstChild("MatchScores")
 	local top = if folder then folder:GetAttribute("Top") else nil
 	local names = if typeof(top) == "string" and top ~= "" then string.split(top, ",") else {}
-	for index, row in rows do
+	for index, circle in circles do
 		local name = names[index]
-		row.Visible = name ~= nil
+		circle.Visible = name ~= nil
 		if not name then continue end
 		if avatars[name] == nil then
 			fetchAvatar(name)
 		end
-		local avatar = row:FindFirstChild("Avatar") :: ImageLabel
-		local rank = row:FindFirstChild("Rank") :: TextLabel
-		local nameLabel = row:FindFirstChild("Name") :: TextLabel
-		local kills = row:FindFirstChild("Kills") :: TextLabel
-		local templateName = template:FindFirstChild("Name") :: TextLabel
-		avatar.Image = avatars[name] or ""
-		rank.Text = tostring(index)
-		nameLabel.Text = string.upper(name)
-		nameLabel.TextColor3 = if name == localPlayer.Name then Constants.TOP_BOARD_SELF_COLOR else templateName.TextColor3
-		kills.Text = tostring(folder:GetAttribute("Kills_" .. name) or 0)
+		circle.Image = avatars[name] or ""
+		local ring = circle:FindFirstChild("Ring") :: UIStroke
+		local templateRing = template:FindFirstChild("Ring") :: UIStroke
+		ring.Color = if name == localPlayer.Name then Constants.TOP_BOARD_SELF_COLOR else templateRing.Color
 	end
 	board.Visible = currentPhase == Constants.PHASE_ROUND
 end
@@ -98,13 +92,13 @@ function TopBoardController.init()
 
 	local playerGui = localPlayer:WaitForChild("PlayerGui")
 	local gui = playerGui:WaitForChild("Game")
-	template = gui:WaitForChild("ID_Objects"):WaitForChild("TopRow")
+	template = gui:WaitForChild("ID_Objects"):WaitForChild("TopAvatar")
 	local boardFrame = gui:WaitForChild("TopBoard") :: Frame
 	for index = 1, Constants.TOP_BOARD_SIZE do
-		local row = template:Clone()
-		row.LayoutOrder = index
-		row.Parent = boardFrame
-		rows[index] = row
+		local circle = template:Clone()
+		circle.LayoutOrder = index
+		circle.Parent = boardFrame
+		circles[index] = circle
 	end
 	board = boardFrame
 
