@@ -95,8 +95,9 @@ local function startCarry(root: BasePart)
 end
 
 -- `hop` is set when the player let go or the pull arrived: the character leaves
--- the rope with a lift on top of the velocity it carries.
-local function release(hop: boolean)
+-- the rope with a lift on top of the velocity it carries. `coast` holds that
+-- speed through the air; an arrival does not coast, so it stops at the anchor.
+local function release(hop: boolean, coast: boolean)
 	if not anchor then return end
 	anchor = nil
 	stalledSince = nil
@@ -111,7 +112,7 @@ local function release(hop: boolean)
 	elseif root then
 		root.AssemblyLinearVelocity = GrappleMath.clampSpeed(root.AssemblyLinearVelocity, Constants.GRAPPLE_MAX_SPEED)
 	end
-	if root and CombatController.isCombatActive() then
+	if root and coast and CombatController.isCombatActive() then
 		startCarry(root)
 	end
 	GrappleReleaseRemote:FireServer()
@@ -159,7 +160,7 @@ function GrappleController.setHeld(on: boolean)
 	if on then
 		tryGrapple()
 	else
-		release(true)
+		release(true, true)
 	end
 end
 
@@ -205,18 +206,18 @@ local function step(dt: number)
 	local now = os.clock()
 	local elapsed = now - startedAt
 	if not root or not pull or not pull.Parent or not canHold() or elapsed >= Constants.GRAPPLE_MAX_TIME then
-		release(false)
+		release(false, true)
 		return
 	end
 	local offset = point - root.Position
 	local distance = offset.Magnitude
 	local direction = offset.Unit
 	if distance <= Constants.GRAPPLE_ARRIVE_DISTANCE then
-		release(true)
+		release(true, false)
 		return
 	end
 	if isStalled(root, now) then
-		release(false)
+		release(false, true)
 		return
 	end
 	-- Past the anchor (it was closing in and no longer is): let go rather than orbit it.
@@ -225,11 +226,11 @@ local function step(dt: number)
 	if towardAnchor > 0 then
 		closing = true
 	elseif closing and towardAnchor < 0 then
-		release(true)
+		release(true, false)
 		return
 	end
 	local steerAccel = steering(root, direction)
-	pull.VectorVelocity = GrappleMath.pullVelocity(velocity, direction, steerAccel, dt)
+	pull.VectorVelocity = GrappleMath.pullVelocity(velocity, direction, distance, steerAccel, dt)
 end
 
 local function stepCarry(dt: number)

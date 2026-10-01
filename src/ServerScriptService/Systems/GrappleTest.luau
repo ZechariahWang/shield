@@ -24,29 +24,40 @@ return function()
 	local dt = 0.1
 	local pullStep = Constants.GRAPPLE_PULL_ACCEL * dt
 	local gravityStep = Constants.GRAPPLE_GRAVITY * dt
+	local far = Constants.GRAPPLE_RANGE
 
 	-- Pull from rest: speeds up toward the anchor and sags under the reduced gravity.
-	local fromRest = GrappleMath.pullVelocity(Vector3.zero, ahead, Vector3.zero, dt)
+	local fromRest = GrappleMath.pullVelocity(Vector3.zero, ahead, far, Vector3.zero, dt)
 	assert(near(fromRest.Z, -pullStep), "accelerates toward the anchor")
 	assert(near(fromRest.Y, -gravityStep), "gravity keeps acting on the rope")
 	assert(near(fromRest.X, 0), "nothing sideways from rest")
 
 	-- Momentum carries through: speed toward the anchor is added to, speed across the rope bends the path.
-	local carried = GrappleMath.pullVelocity(Vector3.new(0, 0, -30), ahead, Vector3.zero, dt)
+	local carried = GrappleMath.pullVelocity(Vector3.new(0, 0, -30), ahead, far, Vector3.zero, dt)
 	assert(near(carried.Z, -(30 + pullStep)), "speed toward the anchor is kept")
-	local swinging = GrappleMath.pullVelocity(Vector3.new(20, 0, 0), ahead, Vector3.zero, dt)
+	local swinging = GrappleMath.pullVelocity(Vector3.new(20, 0, 0), ahead, far, Vector3.zero, dt)
 	assert(near(swinging.X, 20 * math.exp(-Constants.GRAPPLE_SWING_DAMPING * dt)), "sideways speed is kept, lightly damped")
 	assert(swinging.X > 0 and swinging.X < 20, "damping only slows the swing")
 
 	-- Taut rope: speed away from the anchor is dropped.
-	local leaving = GrappleMath.pullVelocity(Vector3.new(0, 0, 40), ahead, Vector3.zero, dt)
+	local leaving = GrappleMath.pullVelocity(Vector3.new(0, 0, 40), ahead, far, Vector3.zero, dt)
 	assert(near(leaving.Z, -pullStep), "moving away starts from rest")
 
-	local tooFast = GrappleMath.pullVelocity(Vector3.new(0, 0, -500), ahead, Vector3.zero, dt)
+	local tooFast = GrappleMath.pullVelocity(Vector3.new(0, 0, -500), ahead, far, Vector3.zero, dt)
 	assert(near(tooFast.Magnitude, Constants.GRAPPLE_MAX_SPEED), "capped at the max speed")
-	local steered = GrappleMath.pullVelocity(Vector3.zero, ahead, Vector3.new(50, 0, 0), dt)
+	local steered = GrappleMath.pullVelocity(Vector3.zero, ahead, far, Vector3.new(50, 0, 0), dt)
 	assert(near(steered.X, 50 * dt), "steering accelerates")
-	assert(GrappleMath.pullVelocity(Vector3.new(0 / 0, 0, 0), ahead, Vector3.zero, dt) == Vector3.zero, "nan velocity pulls nothing")
+	assert(GrappleMath.pullVelocity(Vector3.new(0 / 0, 0, 0), ahead, far, Vector3.zero, dt) == Vector3.zero, "nan velocity pulls nothing")
+
+	-- Near the anchor the pull brakes, so the character arrives at it instead of flying past.
+	local arrive = Constants.GRAPPLE_ARRIVE_DISTANCE
+	local fullSpeed = Vector3.new(0, 0, -Constants.GRAPPLE_MAX_SPEED)
+	local arriving = GrappleMath.pullVelocity(fullSpeed, ahead, arrive, Vector3.zero, dt)
+	assert(near(arriving.Magnitude, Constants.GRAPPLE_ARRIVE_SPEED), "arrival speed at the anchor")
+	local closing = GrappleMath.pullVelocity(fullSpeed, ahead, arrive + 5, Vector3.zero, dt)
+	assert(closing.Magnitude > Constants.GRAPPLE_ARRIVE_SPEED and closing.Magnitude < Constants.GRAPPLE_MAX_SPEED, "brakes on approach")
+	local drifting = GrappleMath.pullVelocity(Vector3.new(90, 0, 0), ahead, arrive, Vector3.zero, dt)
+	assert(drifting.Magnitude <= Constants.GRAPPLE_ARRIVE_SPEED + 1e-4, "sideways speed is braked too")
 
 	-- Steering: across the rope only, at most GRAPPLE_STEER_ACCEL.
 	local steerSpeed = Constants.GRAPPLE_STEER_ACCEL
