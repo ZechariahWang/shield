@@ -12,10 +12,12 @@ local SettingsController = require(script.Parent.SettingsController)
 -- Grapple: holding the Grapple key latches one rope onto the map geometry under the
 -- crosshair and pulls the character to it. The pull runs here because the local
 -- character is client-simulated; the server (GrappleSystem) validates the
--- request and draws the rope for everyone. The pull is a LinearVelocity with a
--- finite force that brakes before the anchor, so geometry in the way stops the
--- character instead of launching it. While attached the movement input steers
--- sideways, jump steers up and the Slide key steers down, all across the rope.
+-- request and draws the rope for everyone. Every frame the velocity the character
+-- actually has goes through GrappleMath.pullVelocity, so momentum carries into
+-- and out of the rope and a collision is felt. It is applied by a LinearVelocity
+-- with a finite force, so geometry in the way stops the character instead of
+-- launching it. While attached the movement input steers sideways, jump steers
+-- up and the Slide key steers down, all across the rope.
 local GrappleController = {}
 
 local localPlayer = Players.LocalPlayer
@@ -25,8 +27,9 @@ local GrappleReleaseRemote: RemoteEvent
 local currentPhase: string = Constants.PHASE_LOBBY
 local anchor: Vector3? = nil
 local pull: LinearVelocity? = nil
-local startSpeed = 0
+local carry: LinearVelocity? = nil
 local startedAt = 0
+local closing = false
 local stalledSince: number? = nil
 local lastReleaseAt = -math.huge
 local downHeld = false
@@ -45,16 +48,20 @@ local function canHold(): boolean
 	return CombatController.getShieldStatus() ~= Constants.SHIELD_UP
 end
 
-local function makePull(root: BasePart): LinearVelocity
+local function rootAttachment(root: BasePart): Attachment
 	local attachment = root:FindFirstChild("RootAttachment") :: Attachment?
 	if not attachment then
 		attachment = Instance.new("Attachment")
 		attachment.Name = "RootAttachment"
 		attachment.Parent = root
 	end
+	return attachment :: Attachment
+end
+
+local function makePull(root: BasePart): LinearVelocity
 	local velocity = Instance.new("LinearVelocity")
 	velocity.Name = "GrappleVelocity"
-	velocity.Attachment0 = attachment
+	velocity.Attachment0 = rootAttachment(root)
 	velocity.RelativeTo = Enum.ActuatorRelativeTo.World
 	velocity.MaxForce = root.AssemblyMass * Constants.PUSH_MAX_ACCEL
 	velocity.VectorVelocity = root.AssemblyLinearVelocity
@@ -62,9 +69,34 @@ local function makePull(root: BasePart): LinearVelocity
 	return velocity
 end
 
--- `launchDirection` is set only when the pull arrived: the character then
--- carries on past the anchor instead of stopping at it.
-local function release(launchDirection: Vector3?)
+local function stopCarry()
+	if carry then
+		carry:Destroy()
+		carry = nil
+	end
+end
+
+-- An airborne humanoid brakes its own horizontal speed (about 150 studs/s^2), so
+-- the speed a release leaves is held in the horizontal plane until the character
+-- lands or is down to running pace. Gravity owns the vertical axis.
+local function startCarry(root: BasePart)
+	local velocity = root.AssemblyLinearVelocity
+	local hold = Instance.new("LinearVelocity")
+	hold.Name = "GrappleCarry"
+	hold.Attachment0 = rootAttachment(root)
+	hold.RelativeTo = Enum.ActuatorRelativeTo.World
+	hold.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
+	hold.PrimaryTangentAxis = Vector3.xAxis
+	hold.SecondaryTangentAxis = Vector3.zAxis
+	hold.MaxForce = root.AssemblyMass * Constants.PUSH_MAX_ACCEL
+	hold.PlaneVelocity = Vector2.new(velocity.X, velocity.Z)
+	hold.Parent = root
+	carry = hold
+end
+
+-- `hop` is set when the player let go or the pull arrived: the character leaves
+-- the rope with a lift on top of the velocity it carries.
+local function release(hop: boolean)
 	if not anchor then return end
 	anchor = nil
 	stalledSince = nil
@@ -74,20 +106,26 @@ local function release(launchDirection: Vector3?)
 		pull = nil
 	end
 	local root = getRoot()
-	if root and launchDirection then
-		root.AssemblyLinearVelocity = GrappleMath.launchVelocity(root.AssemblyLinearVelocity, launchDirection)
+	if root and hop then
+		root.AssemblyLinearVelocity = GrappleMath.releaseVelocity(root.AssemblyLinearVelocity)
 	elseif root then
-		root.AssemblyLinearVelocity = GrappleMath.clampSpeed(root.AssemblyLinearVelocity, Constants.GRAPPLE_SPEED)
+		root.AssemblyLinearVelocity = GrappleMath.clampSpeed(root.AssemblyLinearVelocity, Constants.GRAPPLE_MAX_SPEED)
+	end
+	if root and CombatController.isCombatActive() then
+		startCarry(root)
 	end
 	GrappleReleaseRemote:FireServer()
 end
 
 local function start(root: BasePart, hum: Humanoid, point: Vector3)
-	local direction = (point - root.Position).Unit
+	stopCarry()
 	anchor = point
-	startSpeed = root.AssemblyLinearVelocity:Dot(direction)
 	startedAt = os.clock()
+	closing = false
 	stalledSince = nil
+	if hum.FloorMaterial ~= Enum.Material.Air then
+		root.AssemblyLinearVelocity += Vector3.yAxis * Constants.GRAPPLE_START_HOP
+	end
 	hum:ChangeState(Enum.HumanoidStateType.Freefall)
 	pull = makePull(root)
 	GrappleRequestRemote:FireServer(point)
@@ -121,7 +159,7 @@ function GrappleController.setHeld(on: boolean)
 	if on then
 		tryGrapple()
 	else
-		release()
+		release(true)
 	end
 end
 
@@ -160,29 +198,59 @@ local function steering(root: BasePart, direction: Vector3): Vector3
 	return GrappleMath.steer(direction, right, sideways, vertical)
 end
 
-local function step()
+local function step(dt: number)
 	local point = anchor
 	if not point then return end
 	local root = getRoot()
 	local now = os.clock()
 	local elapsed = now - startedAt
 	if not root or not pull or not pull.Parent or not canHold() or elapsed >= Constants.GRAPPLE_MAX_TIME then
-		release()
+		release(false)
 		return
 	end
 	local offset = point - root.Position
 	local distance = offset.Magnitude
 	local direction = offset.Unit
 	if distance <= Constants.GRAPPLE_ARRIVE_DISTANCE then
-		release(direction)
+		release(true)
 		return
 	end
 	if isStalled(root, now) then
-		release()
+		release(false)
 		return
 	end
-	local along = direction * GrappleMath.pullSpeed(startSpeed, elapsed, distance)
-	pull.VectorVelocity = along + steering(root, direction)
+	-- Past the anchor (it was closing in and no longer is): let go rather than orbit it.
+	local velocity = root.AssemblyLinearVelocity
+	local towardAnchor = velocity:Dot(direction)
+	if towardAnchor > 0 then
+		closing = true
+	elseif closing and towardAnchor < 0 then
+		release(true)
+		return
+	end
+	local steerAccel = steering(root, direction)
+	pull.VectorVelocity = GrappleMath.pullVelocity(velocity, direction, steerAccel, dt)
+end
+
+local function stepCarry(dt: number)
+	local hold = carry
+	if not hold then return end
+	local root = getRoot()
+	local hum = root and (root.Parent :: Instance):FindFirstChildOfClass("Humanoid")
+	if not root or not hum or not hold.Parent or not CombatController.isCombatActive() then
+		stopCarry()
+		return
+	end
+	local velocity = root.AssemblyLinearVelocity
+	local landed = hum.FloorMaterial ~= Enum.Material.Air and velocity.Y <= 0
+	local horizontalSpeed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
+	local dashing = root:FindFirstChild("DashVelocity") ~= nil
+	if landed or dashing or horizontalSpeed <= Constants.SPRINT_WALKSPEED then
+		stopCarry()
+		return
+	end
+	local carried = GrappleMath.carryVelocity(velocity, hum.MoveDirection, dt)
+	hold.PlaneVelocity = Vector2.new(carried.X, carried.Z)
 end
 
 function GrappleController.init()
@@ -215,7 +283,10 @@ function GrappleController.init()
 		end
 	end)
 
-	RunService.RenderStepped:Connect(step)
+	RunService.RenderStepped:Connect(function(dt: number)
+		step(dt)
+		stepCarry(dt)
+	end)
 end
 
 return GrappleController

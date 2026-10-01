@@ -19,25 +19,37 @@ return function()
 	assert(not GrappleMath.validAnchor(root, "wall", 0), "anchor of the wrong type")
 	assert(not GrappleMath.validAnchor(root, nil, 0), "missing anchor")
 
-	-- Pull speed far from the anchor: ramps from the starting speed up to the cap.
-	local far = Constants.GRAPPLE_RANGE
-	assert(near(GrappleMath.pullSpeed(20, 0, far), 20), "starts at the current speed")
-	assert(near(GrappleMath.pullSpeed(0, 0.1, far), Constants.GRAPPLE_ACCEL * 0.1), "ramps with time")
-	assert(near(GrappleMath.pullSpeed(0, 100, far), Constants.GRAPPLE_SPEED), "capped at the grapple speed")
-	assert(near(GrappleMath.pullSpeed(500, 0, far), Constants.GRAPPLE_SPEED), "a fast start is capped too")
-	assert(near(GrappleMath.pullSpeed(-30, 0, far), 0), "moving away starts from rest")
-
-	-- Near the anchor the pull brakes so the character meets the wall slowly.
-	local arrive = Constants.GRAPPLE_ARRIVE_DISTANCE
-	assert(near(GrappleMath.pullSpeed(0, 100, arrive), Constants.GRAPPLE_ARRIVE_SPEED), "arrival speed at the anchor")
-	assert(near(GrappleMath.pullSpeed(0, 100, 0), Constants.GRAPPLE_ARRIVE_SPEED), "never below the arrival speed")
-	local closing = GrappleMath.pullSpeed(0, 100, arrive + 1)
-	assert(closing > Constants.GRAPPLE_ARRIVE_SPEED and closing < Constants.GRAPPLE_SPEED, "brakes on approach")
-
-	-- Steering: across the rope only, at most GRAPPLE_STEER_SPEED.
-	local steerSpeed = Constants.GRAPPLE_STEER_SPEED
 	local ahead = Vector3.new(0, 0, -1)
 	local right = Vector3.new(1, 0, 0)
+	local dt = 0.1
+	local pullStep = Constants.GRAPPLE_PULL_ACCEL * dt
+	local gravityStep = Constants.GRAPPLE_GRAVITY * dt
+
+	-- Pull from rest: speeds up toward the anchor and sags under the reduced gravity.
+	local fromRest = GrappleMath.pullVelocity(Vector3.zero, ahead, Vector3.zero, dt)
+	assert(near(fromRest.Z, -pullStep), "accelerates toward the anchor")
+	assert(near(fromRest.Y, -gravityStep), "gravity keeps acting on the rope")
+	assert(near(fromRest.X, 0), "nothing sideways from rest")
+
+	-- Momentum carries through: speed toward the anchor is added to, speed across the rope bends the path.
+	local carried = GrappleMath.pullVelocity(Vector3.new(0, 0, -30), ahead, Vector3.zero, dt)
+	assert(near(carried.Z, -(30 + pullStep)), "speed toward the anchor is kept")
+	local swinging = GrappleMath.pullVelocity(Vector3.new(20, 0, 0), ahead, Vector3.zero, dt)
+	assert(near(swinging.X, 20 * math.exp(-Constants.GRAPPLE_SWING_DAMPING * dt)), "sideways speed is kept, lightly damped")
+	assert(swinging.X > 0 and swinging.X < 20, "damping only slows the swing")
+
+	-- Taut rope: speed away from the anchor is dropped.
+	local leaving = GrappleMath.pullVelocity(Vector3.new(0, 0, 40), ahead, Vector3.zero, dt)
+	assert(near(leaving.Z, -pullStep), "moving away starts from rest")
+
+	local tooFast = GrappleMath.pullVelocity(Vector3.new(0, 0, -500), ahead, Vector3.zero, dt)
+	assert(near(tooFast.Magnitude, Constants.GRAPPLE_MAX_SPEED), "capped at the max speed")
+	local steered = GrappleMath.pullVelocity(Vector3.zero, ahead, Vector3.new(50, 0, 0), dt)
+	assert(near(steered.X, 50 * dt), "steering accelerates")
+	assert(GrappleMath.pullVelocity(Vector3.new(0 / 0, 0, 0), ahead, Vector3.zero, dt) == Vector3.zero, "nan velocity pulls nothing")
+
+	-- Steering: across the rope only, at most GRAPPLE_STEER_ACCEL.
+	local steerSpeed = Constants.GRAPPLE_STEER_ACCEL
 	assert(GrappleMath.steer(ahead, right, 0, 0) == Vector3.zero, "no input, no steering")
 	local sideways = GrappleMath.steer(ahead, right, 1, 0)
 	assert(near(sideways.X, steerSpeed) and near(sideways.Y, 0) and near(sideways.Z, 0), "steer right")
@@ -66,15 +78,25 @@ return function()
 	assert(GrappleMath.clampSpeed(Vector3.zero, 50) == Vector3.zero, "zero velocity")
 	assert(GrappleMath.clampSpeed(Vector3.new(0 / 0, 0, 0), 50) == Vector3.zero, "nan velocity is dropped")
 
-	-- Arrival launch: the carried velocity keeps going along the rope, past the anchor, with a lift.
-	local arriving = Vector3.new(0, 0, -Constants.GRAPPLE_ARRIVE_SPEED)
-	local launch = GrappleMath.launchVelocity(arriving, ahead)
-	assert(near(launch.Z, -(Constants.GRAPPLE_ARRIVE_SPEED + Constants.GRAPPLE_LAUNCH_SPEED)), "boost along the rope")
-	assert(near(launch.Y, Constants.GRAPPLE_LAUNCH_LIFT), "lift on arrival")
-	assert(near(launch.X, 0), "nothing sideways")
-	local capped = GrappleMath.launchVelocity(Vector3.new(0, 0, -500), ahead)
-	assert(near(capped.Magnitude, Constants.GRAPPLE_SPEED + Constants.GRAPPLE_LAUNCH_SPEED), "launch speed is capped")
-	assert(GrappleMath.launchVelocity(Vector3.new(0 / 0, 0, 0), ahead) == Vector3.zero, "nan velocity launches nothing")
+	-- Release: the carried velocity is kept, with a hop on top.
+	local released = GrappleMath.releaseVelocity(Vector3.new(0, 0, -50))
+	assert(near(released.Z, -50), "momentum kept on release")
+	assert(near(released.Y, Constants.GRAPPLE_RELEASE_LIFT), "hop on release")
+	assert(near(released.X, 0), "nothing sideways")
+	local capped = GrappleMath.releaseVelocity(Vector3.new(0, 0, -500))
+	assert(near(capped.Magnitude, Constants.GRAPPLE_MAX_SPEED), "release speed is capped")
+	assert(GrappleMath.releaseVelocity(Vector3.new(0 / 0, 0, 0)) == Vector3.zero, "nan velocity releases nothing")
+
+	-- Carry after the release: horizontal only, slowly dragging, steered by the movement input.
+	local coasting = GrappleMath.carryVelocity(Vector3.new(100, -50, 0), Vector3.zero, dt)
+	assert(near(coasting.X, 100 * math.exp(-Constants.GRAPPLE_CARRY_DRAG * dt)), "drag slows the carry")
+	assert(coasting.X > 90, "most of the speed survives a step")
+	assert(near(coasting.Y, 0), "the carry leaves the vertical axis alone")
+	local turned = GrappleMath.carryVelocity(Vector3.new(100, 0, 0), ahead, dt)
+	assert(near(turned.Z, -Constants.GRAPPLE_CARRY_STEER_ACCEL * dt), "movement input steers the carry")
+	local overCap = GrappleMath.carryVelocity(Vector3.new(500, 0, 0), Vector3.zero, dt)
+	assert(overCap.Magnitude <= Constants.GRAPPLE_MAX_SPEED + 1e-4, "carry speed is capped")
+	assert(GrappleMath.carryVelocity(Vector3.new(0 / 0, 0, 0), Vector3.zero, dt) == Vector3.zero, "nan velocity carries nothing")
 
 	print("GrappleTest: all checks passed")
 end
