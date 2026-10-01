@@ -7,6 +7,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Catalog = require(ReplicatedStorage.Shared.Catalog)
 local Constants = require(ReplicatedStorage.Shared.Constants)
+local KillCamController = require(script.Parent.KillCamController)
 
 local ShopController = {}
 
@@ -616,9 +617,11 @@ end
 
 -- The lobby UI exists only for players standing in the lobby: the state flips to
 -- Lobby on elimination and after the round-end teleport, and to Safe on a spawn.
+-- The state is already Lobby while the kill cam plays, so the buttons wait for it
+-- to end and come back together with the menu view.
 local function reconcileLobbyUI()
 	local inLobby = localState == Constants.STATE_LOBBY
-	lobbyButtons.Visible = inLobby
+	lobbyButtons.Visible = inLobby and not KillCamController.isPlaying()
 	if not inLobby then
 		ShopController.closeAll()
 	end
@@ -801,6 +804,7 @@ function ShopController.init()
 		localState = state
 		reconcileLobbyUI()
 	end)
+	KillCamController.PlayingChanged.Event:Connect(reconcileLobbyUI)
 
 	ShopStateRemote:FireServer()
 end

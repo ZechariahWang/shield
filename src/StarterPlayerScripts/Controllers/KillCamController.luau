@@ -29,12 +29,21 @@ end
 
 local playing = false
 
+-- Fired with the new value when the kill cam starts and when it ends.
+KillCamController.PlayingChanged = Instance.new("BindableEvent")
+
 function KillCamController.isPlaying(): boolean
 	return playing
 end
 
+local function setPlaying(on: boolean)
+	if playing == on then return end
+	playing = on
+	KillCamController.PlayingChanged:Fire(on)
+end
+
 local function restoreCamera()
-	playing = false
+	setPlaying(false)
 	local camera = Workspace.CurrentCamera
 	if not camera then return end
 	camera.CameraType = Enum.CameraType.Custom
@@ -57,7 +66,7 @@ function KillCamController.play(killerCharacter: Model)
 	local startedAt = os.clock()
 
 	camera.CameraType = Enum.CameraType.Scriptable
-	playing = true
+	setPlaying(true)
 
 	local connection: RBXScriptConnection
 	connection = RunService.RenderStepped:Connect(function()
