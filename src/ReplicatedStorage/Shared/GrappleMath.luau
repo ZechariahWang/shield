@@ -21,36 +21,46 @@ function GrappleMath.validAnchor(rootPosition: Vector3, anchor: any, slack: numb
 end
 
 -- The velocity after `dt` seconds on the rope, from the velocity actually carried.
--- Speed toward the anchor is kept and grows by GRAPPLE_PULL_ACCEL; speed away from
--- it is dropped (the rope is taut); speed across the rope is kept, lightly damped,
--- so the path bends into the anchor. Over the last studs the whole speed brakes
--- down to GRAPPLE_ARRIVE_SPEED, so the character arrives at the anchor instead of
--- flying past it. `direction` is the unit vector to the anchor, `distance` the
--- studs to it, `steerAccel` the acceleration from GrappleMath.steer.
-function GrappleMath.pullVelocity(velocity: Vector3, direction: Vector3, distance: number, steerAccel: Vector3, dt: number): Vector3
-	local alongSpeed = velocity:Dot(direction)
-	local across = velocity - direction * alongSpeed
+-- Speed away from the anchor is dropped (the rope is taut). The pull then follows
+-- `guide` (GrappleMath.guide: the rope direction, leaned by the steering input):
+-- speed along it is kept and grows by GRAPPLE_PULL_ACCEL, speed across it decays
+-- at GRAPPLE_SWING_DAMPING, so the path bends onto the guide. Over the last studs
+-- the whole speed brakes down to GRAPPLE_ARRIVE_SPEED, so the character arrives at
+-- the anchor instead of flying past it. `direction` is the unit vector to the
+-- anchor, `distance` the studs to it.
+function GrappleMath.pullVelocity(velocity: Vector3, direction: Vector3, guide: Vector3, distance: number, dt: number): Vector3
+	local awaySpeed = -velocity:Dot(direction)
+	if awaySpeed > 0 then
+		velocity = velocity + direction * awaySpeed
+	end
+	local alongSpeed = velocity:Dot(guide)
+	local across = velocity - guide * alongSpeed
 	across = across * math.exp(-Constants.GRAPPLE_SWING_DAMPING * dt)
 	alongSpeed = math.max(alongSpeed, 0) + Constants.GRAPPLE_PULL_ACCEL * dt
 	local gravity = Vector3.yAxis * (-Constants.GRAPPLE_GRAVITY * dt)
-	local pulled = direction * alongSpeed + across + steerAccel * dt + gravity
+	local pulled = guide * alongSpeed + across + gravity
 	local left = math.max(distance - Constants.GRAPPLE_ARRIVE_DISTANCE, 0)
 	local brakeSpeed = Constants.GRAPPLE_ARRIVE_SPEED + left * Constants.GRAPPLE_BRAKE_RATE
 	local maxSpeed = math.min(Constants.GRAPPLE_MAX_SPEED, brakeSpeed)
 	return GrappleMath.clampSpeed(pulled, maxSpeed)
 end
 
--- Steering acceleration from a sideways and a vertical input (-1..1 each): across
--- the rope only, since the pull owns the axis along it. `direction` is the unit
--- vector to the anchor, `right` the unit vector sideways input pushes along.
-function GrappleMath.steer(direction: Vector3, right: Vector3, sideways: number, vertical: number): Vector3
+-- The unit direction the pull follows: the rope direction leaned toward the
+-- steering input (sideways and vertical, -1..1 each) by up to GRAPPLE_ARC_ANGLE.
+-- Heading a fixed angle off the anchor bows the path out to that side, and the
+-- lean fades to nothing over the last GRAPPLE_ARC_FULL_DISTANCE studs, so the arc
+-- curves back and meets the anchor head-on. `direction` is the unit vector to the
+-- anchor, `right` the unit vector sideways input leans along, `distance` the studs left.
+function GrappleMath.guide(direction: Vector3, right: Vector3, sideways: number, vertical: number, distance: number): Vector3
 	local raw = right * sideways + Vector3.yAxis * vertical
 	local across = raw - direction * raw:Dot(direction)
 	local amount = across.Magnitude
-	if amount > 1 then
-		across = across / amount
-	end
-	return across * Constants.GRAPPLE_STEER_ACCEL
+	if amount < 1e-4 then return direction end
+	local side = across / amount
+	local input = math.min(amount, 1)
+	local fade = math.clamp(distance / Constants.GRAPPLE_ARC_FULL_DISTANCE, 0, 1)
+	local angle = math.rad(Constants.GRAPPLE_ARC_ANGLE) * input * fade
+	return direction * math.cos(angle) + side * math.sin(angle)
 end
 
 -- The velocity to leave the rope with: the carried velocity plus

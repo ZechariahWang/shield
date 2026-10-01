@@ -16,8 +16,9 @@ local SettingsController = require(script.Parent.SettingsController)
 -- actually has goes through GrappleMath.pullVelocity, so momentum carries into
 -- and out of the rope and a collision is felt. It is applied by a LinearVelocity
 -- with a finite force, so geometry in the way stops the character instead of
--- launching it. While attached the movement input steers sideways, jump steers
--- up and the Slide key steers down, all across the rope.
+-- launching it. While attached a steering input (the movement input sideways,
+-- jump for up, the Slide key for down) leans the pull off the rope, so the path
+-- bows out to that side in an arc that curves back into the anchor.
 local GrappleController = {}
 
 local localPlayer = Players.LocalPlayer
@@ -180,13 +181,14 @@ local function isStalled(root: BasePart, now: number): boolean
 	return now - stalledSince >= Constants.GRAPPLE_STALL_TIME
 end
 
--- Sideways comes from the movement input along the camera's right (A/D, or the
--- thumbstick); up is jump held, down the Slide key. Humanoid.Jump is read rather
+-- The direction the pull follows: the rope's, leaned into an arc by the steering
+-- input. Sideways comes from the movement input along the camera's right (A/D, or
+-- the thumbstick); up is jump held, down the Slide key. Humanoid.Jump is read rather
 -- than JumpRequest, which fires with gaps of up to half a second while held.
-local function steering(root: BasePart, direction: Vector3): Vector3
+local function guideDirection(root: BasePart, direction: Vector3, distance: number): Vector3
 	local camera = Workspace.CurrentCamera
 	local hum = (root.Parent :: Instance):FindFirstChildOfClass("Humanoid")
-	if not camera or not hum then return Vector3.zero end
+	if not camera or not hum then return direction end
 	local right = camera.CFrame.RightVector
 	local sideways = math.clamp(hum.MoveDirection:Dot(right), -1, 1)
 	local vertical = 0
@@ -196,7 +198,7 @@ local function steering(root: BasePart, direction: Vector3): Vector3
 	if downHeld then
 		vertical -= 1
 	end
-	return GrappleMath.steer(direction, right, sideways, vertical)
+	return GrappleMath.guide(direction, right, sideways, vertical, distance)
 end
 
 local function step(dt: number)
@@ -229,8 +231,8 @@ local function step(dt: number)
 		release(true, false)
 		return
 	end
-	local steerAccel = steering(root, direction)
-	pull.VectorVelocity = GrappleMath.pullVelocity(velocity, direction, distance, steerAccel, dt)
+	local guide = guideDirection(root, direction, distance)
+	pull.VectorVelocity = GrappleMath.pullVelocity(velocity, direction, guide, distance, dt)
 end
 
 local function stepCarry(dt: number)
