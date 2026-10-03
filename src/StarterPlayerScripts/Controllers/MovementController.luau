@@ -11,6 +11,7 @@ local MovementBlend = require(ReplicatedStorage.Shared.MovementBlend)
 local CombatController = require(script.Parent.CombatController)
 local GrappleController = require(script.Parent.GrappleController)
 local SettingsController = require(script.Parent.SettingsController)
+local ShiftLockController = require(script.Parent.ShiftLockController)
 
 -- Client-side movement extras while combat is active: hold Shift to sprint,
 -- hold the Aim key to aim (FOV zoom only), press jump again in the air for a
@@ -38,6 +39,7 @@ local slideDirection: Vector3? = nil
 local slideVelocity: LinearVelocity? = nil
 local slideStartedAt = 0
 local lastSlideEndedAt = -math.huge
+local cameraDrop = 0
 
 -- Movement animations: five looping tracks (idle plus four walk directions) at
 -- Movement priority share weights that sum to 1 while grounded, replacing the stock
@@ -223,6 +225,13 @@ local function stepSlide()
 	end
 end
 
+local function stepCameraDrop(dt: number)
+	local target = if slideDirection then Constants.SLIDE_CAMERA_DROP else 0
+	local maxStep = Constants.SLIDE_CAMERA_DROP * dt / Constants.SLIDE_CAMERA_DROP_TIME
+	cameraDrop += math.clamp(target - cameraDrop, -maxStep, maxStep)
+	ShiftLockController.setCameraDrop(cameraDrop)
+end
+
 local function tweenFov(target: number, duration: number)
 	if target == currentFovTarget then return end
 	currentFovTarget = target
@@ -241,7 +250,7 @@ end
 local function reconcileFov()
 	if aiming then
 		tweenFov(Constants.AIM_FOV, Constants.AIM_FOV_TWEEN_TIME)
-	elseif sprinting then
+	elseif sprinting or slideDirection then
 		tweenFov(Constants.SPRINT_FOV, Constants.SPRINT_FOV_TWEEN_TIME)
 	else
 		local duration = if currentFovTarget == Constants.AIM_FOV then Constants.AIM_FOV_TWEEN_TIME else Constants.SPRINT_FOV_TWEEN_TIME
@@ -273,12 +282,13 @@ local function reconcileSensitivity()
 	end
 end
 
-local function step()
+local function step(dt: number)
 	setSprinting(canSprint())
 	aiming = aimHeld and CombatController.isCombatActive()
 	reconcileFov()
 	reconcileSensitivity()
 	stepSlide()
+	stepCameraDrop(dt)
 	stepAnimations()
 	if not sprinting then return end
 	local hum = getHumanoid()

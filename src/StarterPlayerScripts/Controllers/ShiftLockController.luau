@@ -22,6 +22,7 @@ local RENDER_STEP_NAME = "BurnRushShiftLock"
 local localState: string = Constants.STATE_LOBBY
 local currentPhase: string = Constants.PHASE_LOBBY
 local locked = false
+local cameraDrop = 0
 
 local function getHumanoid(): Humanoid?
 	local char = localPlayer.Character
@@ -35,7 +36,13 @@ end
 
 -- The CameraOffset the character should rest at; the damage shake adds on top of this.
 function ShiftLockController.baseCameraOffset(): Vector3
-	return if locked then Constants.SHIFTLOCK_CAMERA_OFFSET else Vector3.zero
+	local shoulder = if locked then Constants.SHIFTLOCK_CAMERA_OFFSET else Vector3.zero
+	return shoulder - Vector3.new(0, cameraDrop, 0)
+end
+
+-- Studs the camera rests below its usual height (MovementController's slide).
+function ShiftLockController.setCameraDrop(drop: number)
+	cameraDrop = drop
 end
 
 local function step()
