@@ -47,5 +47,27 @@ return function()
 	assert(MovementBlend.dashTrack(Vector3.new(0, 0, 1)) == "Backward", "dash backward")
 	assert(MovementBlend.dashTrack(Vector3.zero) == "Forward", "standing dash is forward")
 
+	-- Playback is capped, so a dash or a grapple landing does not spin the legs.
+	assert(near(MovementBlend.playback("Forward", 500), Constants.MOVEMENT_ANIM_MAX_PLAYBACK), "playback cap")
+	assert(near(MovementBlend.playback("Run", 500), Constants.MOVEMENT_ANIM_MAX_PLAYBACK), "run playback cap")
+
+	-- Fit: the playback speed that makes a one-shot clip last the move it belongs to.
+	assert(near(MovementBlend.fitSpeed(1, 0.5), 2), "a clip twice as long plays twice as fast")
+	assert(near(MovementBlend.fitSpeed(0.35, 0.7), 0.5), "a short clip is stretched")
+	assert(near(MovementBlend.fitSpeed(0, 0.5), 1), "an unloaded clip plays as authored")
+	assert(near(MovementBlend.fitSpeed(1, 0), 1), "no duration plays as authored")
+
+	-- Leader: the heaviest locomotion track sets the stride phase the others join in on.
+	assert(MovementBlend.leader(forward) == "Forward", "forward leads")
+	assert(MovementBlend.leader(run) == "Run", "run leads")
+	assert(MovementBlend.leader(still) == nil, "idle has no leader")
+	local mostlyRight = MovementBlend.weights(Vector3.new(0.9, 0, -0.4), 1, true, false)
+	assert(MovementBlend.leader(mostlyRight) == "Right", "the heavier walk leads")
+
+	-- Follow: a track of another length plays at the speed that gives it the leader's cycle time.
+	assert(near(MovementBlend.followSpeed(1, 0.8, 0.4), 0.5), "a shorter clip slows to the leader's cycle")
+	assert(near(MovementBlend.followSpeed(1.5, 0.8, 0.8), 1.5), "equal lengths share the speed")
+	assert(near(MovementBlend.followSpeed(1.5, 0, 0.8), 1.5), "an unloaded leader passes its speed on")
+
 	print("MovementBlendTest: all checks passed")
 end

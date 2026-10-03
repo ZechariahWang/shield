@@ -51,7 +51,35 @@ end
 function MovementBlend.playback(name: string, horizontalSpeed: number): number
 	if name == "Idle" then return 1 end
 	local reference = if name == "Run" then Constants.MOVEMENT_RUN_REFERENCE_SPEED else Constants.MOVEMENT_ANIM_REFERENCE_SPEED
-	return math.max(horizontalSpeed / reference, 0.1)
+	return math.clamp(horizontalSpeed / reference, 0.1, Constants.MOVEMENT_ANIM_MAX_PLAYBACK)
+end
+
+-- Playback speed that makes a one-shot clip of `length` seconds last `duration`.
+function MovementBlend.fitSpeed(length: number, duration: number): number
+	if length <= 0 or duration <= 0 then return 1 end
+	return length / duration
+end
+
+-- The heaviest locomotion track (never Idle), nil when none has weight. Its stride
+-- phase is the one the other walk tracks keep.
+function MovementBlend.leader(weights: Weights): string?
+	local best: string? = nil
+	local bestWeight = 0
+	for _, name in MovementBlend.TRACKS do
+		local weight = (weights :: { [string]: number })[name]
+		if name ~= "Idle" and weight > bestWeight then
+			best = name
+			bestWeight = weight
+		end
+	end
+	return best
+end
+
+-- Playback speed for a track of `length` seconds so one cycle takes as long as the
+-- leader's: clips of different lengths then stay in step while they blend.
+function MovementBlend.followSpeed(leaderSpeed: number, leaderLength: number, length: number): number
+	if leaderLength <= 0 or length <= 0 then return leaderSpeed end
+	return leaderSpeed * length / leaderLength
 end
 
 return MovementBlend

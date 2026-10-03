@@ -127,6 +127,19 @@ local function stepAnimations()
 	local root = hum.RootPart
 	local velocity = if root then root.AssemblyLinearVelocity else Vector3.zero
 	local horizontalSpeed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
+	-- The walk and run clips differ in length. Each plays at the speed that gives it
+	-- the leading track's cycle time, and one that is faded out is put on the
+	-- leader's stride phase, so a blend never has the feet out of step.
+	local leaderName = MovementBlend.leader(weights)
+	local leader = if leaderName then moveTracks[leaderName] else nil
+	local leaderSpeed = 1
+	local leaderPhase: number? = nil
+	if leaderName and leader then
+		leaderSpeed = MovementBlend.playback(leaderName, horizontalSpeed)
+		if leader.Length > 0 then
+			leaderPhase = leader.TimePosition / leader.Length
+		end
+	end
 	for name, track in moveTracks do
 		-- Applying the character's appearance after a respawn stops every track on
 		-- the Animator; the stock Animate script re-plays on state events, we re-play here.
@@ -134,7 +147,14 @@ local function stepAnimations()
 			track:Play(0, WEIGHT_EPSILON)
 		end
 		track:AdjustWeight(math.max(weights[name] or 0, WEIGHT_EPSILON), fade)
-		track:AdjustSpeed(MovementBlend.playback(name, horizontalSpeed))
+		if name == "Idle" or not leader or track == leader then
+			track:AdjustSpeed(MovementBlend.playback(name, horizontalSpeed))
+		else
+			track:AdjustSpeed(MovementBlend.followSpeed(leaderSpeed, leader.Length, track.Length))
+			if leaderPhase and track.WeightCurrent < Constants.MOVEMENT_SYNC_WEIGHT then
+				track.TimePosition = leaderPhase * track.Length
+			end
+		end
 	end
 end
 
@@ -145,7 +165,8 @@ function MovementController.playDashAnimation()
 	local move = localMove(hum) or Vector3.zero
 	local track = dashTracks[MovementBlend.dashTrack(move)]
 	if track then
-		track:Play()
+		local speed = MovementBlend.fitSpeed(track.Length, Constants.DASH_ANIM_TIME)
+		track:Play(Constants.ACTION_ANIM_FADE, 1, speed)
 	end
 end
 
@@ -165,8 +186,9 @@ local function endSlide()
 	end
 end
 
-local function slideSpeed(t: number): number
-	return Constants.SLIDE_SPEED + (Constants.SAFE_WALKSPEED - Constants.SLIDE_SPEED) * t * t
+-- Eases from SLIDE_SPEED to `endSpeed`, the pace the character walks or runs on at.
+local function slideSpeed(t: number, endSpeed: number): number
+	return Constants.SLIDE_SPEED + (endSpeed - Constants.SLIDE_SPEED) * t * t
 end
 
 -- Constrains only the horizontal plane so gravity and slopes still apply.
@@ -185,7 +207,7 @@ local function makeSlideVelocity(root: BasePart, direction: Vector3): LinearVelo
 	velocity.PrimaryTangentAxis = Vector3.xAxis
 	velocity.SecondaryTangentAxis = Vector3.zAxis
 	velocity.MaxForce = math.huge
-	velocity.PlaneVelocity = Vector2.new(direction.X, direction.Z) * slideSpeed(0)
+	velocity.PlaneVelocity = Vector2.new(direction.X, direction.Z) * Constants.SLIDE_SPEED
 	velocity.Parent = root
 	return velocity
 end
@@ -206,7 +228,8 @@ local function trySlide()
 	slideStartedAt = os.clock()
 	slideVelocity = makeSlideVelocity(root, slideDirection)
 	if slideTrack then
-		slideTrack:Play()
+		local speed = MovementBlend.fitSpeed(slideTrack.Length, Constants.SLIDE_DURATION)
+		slideTrack:Play(Constants.ACTION_ANIM_FADE, 1, speed)
 	end
 end
 
@@ -221,7 +244,8 @@ local function stepSlide()
 		return
 	end
 	if slideVelocity then
-		slideVelocity.PlaneVelocity = Vector2.new(direction.X, direction.Z) * slideSpeed(elapsed / Constants.SLIDE_DURATION)
+		local speed = slideSpeed(elapsed / Constants.SLIDE_DURATION, hum.WalkSpeed)
+		slideVelocity.PlaneVelocity = Vector2.new(direction.X, direction.Z) * speed
 	end
 end
 
