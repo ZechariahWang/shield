@@ -270,10 +270,21 @@ local function tweenFov(target: number, duration: number)
 	fovTween:Play()
 end
 
--- Aim wins over sprint for the FOV; sprint still applies to WalkSpeed.
+-- Faster than anything on foot: the grapple pull and the fling after it.
+function MovementController.isMovingFast(): boolean
+	if not CombatController.isCombatActive() then return false end
+	local hum = getHumanoid()
+	local root = hum and hum.RootPart
+	if not root then return false end
+	return root.AssemblyLinearVelocity.Magnitude >= Constants.SPEED_FOV_MIN_SPEED
+end
+
+-- Aim wins over speed and sprint for the FOV; sprint still applies to WalkSpeed.
 local function reconcileFov()
 	if aiming then
 		tweenFov(Constants.AIM_FOV, Constants.AIM_FOV_TWEEN_TIME)
+	elseif MovementController.isMovingFast() then
+		tweenFov(Constants.SPEED_FOV, Constants.SPRINT_FOV_TWEEN_TIME)
 	elseif sprinting or slideDirection then
 		tweenFov(Constants.SPRINT_FOV, Constants.SPRINT_FOV_TWEEN_TIME)
 	else

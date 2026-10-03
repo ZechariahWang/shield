@@ -20,6 +20,18 @@ function GrappleMath.validAnchor(rootPosition: Vector3, anchor: any, slack: numb
 	return distance <= Constants.GRAPPLE_RANGE + slack
 end
 
+-- Seconds the hook takes to fly `distance` studs to its anchor.
+function GrappleMath.hookTime(distance: number): number
+	local time = distance / Constants.GRAPPLE_HOOK_SPEED
+	return math.min(time, Constants.GRAPPLE_HOOK_MAX_TIME)
+end
+
+-- How far along its flight the hook is, 0 at the hand to 1 latched.
+function GrappleMath.hookProgress(elapsed: number, flightTime: number): number
+	if flightTime <= 0 then return 1 end
+	return math.clamp(elapsed / flightTime, 0, 1)
+end
+
 -- The velocity after `dt` seconds on the rope, from the velocity actually carried.
 -- Speed away from the anchor is dropped (the rope is taut). The pull then follows
 -- `guide` (GrappleMath.guide: the rope direction, leaned by the steering input):

@@ -25,6 +25,17 @@ function LeanSystem._target(base: CFrame, localMove: Vector3): CFrame
 	return base * CFrame.Angles(pitch, roll, 0)
 end
 
+-- The lean input while the grapple rope is out: the root-space horizontal velocity,
+-- scaled so GRAPPLE_MAX_SPEED tips the torso GRAPPLE_LEAN_ANGLE through _target.
+function LeanSystem._grappleMove(localVelocity: Vector3): Vector3
+	local horizontal = Vector3.new(localVelocity.X, 0, localVelocity.Z)
+	local speed = horizontal.Magnitude
+	if speed < 1e-3 then return Vector3.zero end
+	local share = math.min(speed / Constants.GRAPPLE_MAX_SPEED, 1)
+	local full = Constants.GRAPPLE_LEAN_ANGLE / Constants.LEAN_MAX_ANGLE
+	return horizontal.Unit * (share * full)
+end
+
 local function stepCharacter(char: Model, alpha: number)
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	local root = char:FindFirstChild("HumanoidRootPart")
@@ -40,6 +51,9 @@ local function stepCharacter(char: Model, alpha: number)
 
 	local move = root.CFrame:VectorToObjectSpace(hum.MoveDirection)
 	move = Vector3.new(move.X, 0, move.Z)
+	if char:FindFirstChild("GrappleRope") then
+		move = LeanSystem._grappleMove(root.CFrame:VectorToObjectSpace(root.AssemblyLinearVelocity))
+	end
 	local target = LeanSystem._target(base, move)
 	local next = joint.C0:Lerp(target, alpha)
 	if next:FuzzyEq(target, SNAP_EPSILON) then

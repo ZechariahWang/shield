@@ -124,5 +124,15 @@ return function()
 	assert(overCap.Magnitude <= Constants.GRAPPLE_MAX_SPEED + 1e-4, "carry speed is capped")
 	assert(GrappleMath.carryVelocity(Vector3.new(0 / 0, 0, 0), Vector3.zero, dt) == Vector3.zero, "nan velocity carries nothing")
 
+	-- Hook flight: the hook takes time to reach the anchor, capped so a long shot still latches quickly.
+	assert(near(GrappleMath.hookTime(0), 0), "no distance, no flight")
+	local shortFlight = Constants.GRAPPLE_HOOK_MAX_TIME / 2
+	assert(near(GrappleMath.hookTime(Constants.GRAPPLE_HOOK_SPEED * shortFlight), shortFlight), "flight time is distance over hook speed")
+	assert(near(GrappleMath.hookTime(1e6), Constants.GRAPPLE_HOOK_MAX_TIME), "flight time is capped")
+	assert(near(GrappleMath.hookProgress(0, 0.2), 0), "the hook starts at the hand")
+	assert(near(GrappleMath.hookProgress(0.1, 0.2), 0.5), "halfway through the flight")
+	assert(near(GrappleMath.hookProgress(1, 0.2), 1), "latched after the flight")
+	assert(near(GrappleMath.hookProgress(0, 0), 1), "no flight time latches at once")
+
 	print("GrappleTest: all checks passed")
 end

@@ -5,9 +5,10 @@ local RunService = game:GetService("RunService")
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local MovementController = require(script.Parent.MovementController)
 
--- Purely cosmetic sprint speed lines: thin streaks hanging off the screen
--- border, pointing at the center, that fade in while the local character is sprinting
--- and actually moving at sprint speed, and flicker by respawning at new angles.
+-- Purely cosmetic speed lines: thin streaks hanging off the screen border,
+-- pointing at the center, that fade in while the local character is sprinting and
+-- actually moving at sprint speed, or moving faster than SPEED_FOV_MIN_SPEED (the
+-- grapple), and flicker by respawning at new angles.
 -- Built in code inside the Game ScreenGui; nothing here touches gameplay.
 local SprintEffectController = {}
 
@@ -69,6 +70,7 @@ local function buildContainer(gameGui: ScreenGui)
 end
 
 local function movingAtSprintSpeed(): boolean
+	if MovementController.isMovingFast() then return true end
 	if not MovementController.isSprinting() then return false end
 	local char = localPlayer.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?

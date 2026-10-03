@@ -9,8 +9,9 @@ local GrappleMath = require(ReplicatedStorage.Shared.GrappleMath)
 local CombatController = require(script.Parent.CombatController)
 local SettingsController = require(script.Parent.SettingsController)
 
--- Grapple: holding the Grapple key latches one rope onto the map geometry under the
--- crosshair and pulls the character to it. The pull runs here because the local
+-- Grapple: holding the Grapple key fires one hook at the map geometry under the
+-- crosshair; it flies for GrappleMath.hookTime, latches, and the rope pulls the
+-- character to it. Until it lands the character moves freely. The pull runs here because the local
 -- character is client-simulated; the server (GrappleSystem) validates the
 -- request and draws the rope for everyone. Every frame the velocity the character
 -- actually has goes through GrappleMath.pullVelocity, so momentum carries into
@@ -30,6 +31,7 @@ local anchor: Vector3? = nil
 local pull: LinearVelocity? = nil
 local carry: LinearVelocity? = nil
 local startedAt = 0
+local landsAt = 0
 local closing = false
 local stalledSince: number? = nil
 local lastReleaseAt = -math.huge
@@ -103,10 +105,11 @@ local function release(hop: boolean, coast: boolean)
 	anchor = nil
 	stalledSince = nil
 	lastReleaseAt = os.clock()
-	if pull then
-		pull:Destroy()
-		pull = nil
-	end
+	GrappleReleaseRemote:FireServer()
+	-- A hook still in flight never pulled: nothing to hop or coast with.
+	if not pull then return end
+	pull:Destroy()
+	pull = nil
 	local root = getRoot()
 	if root and hop then
 		root.AssemblyLinearVelocity = GrappleMath.releaseVelocity(root.AssemblyLinearVelocity)
@@ -116,21 +119,25 @@ local function release(hop: boolean, coast: boolean)
 	if root and coast and CombatController.isCombatActive() then
 		startCarry(root)
 	end
-	GrappleReleaseRemote:FireServer()
 end
 
-local function start(root: BasePart, hum: Humanoid, point: Vector3)
-	stopCarry()
+local function fire(root: BasePart, point: Vector3)
 	anchor = point
 	startedAt = os.clock()
+	landsAt = startedAt + GrappleMath.hookTime((point - root.Position).Magnitude)
 	closing = false
 	stalledSince = nil
+	GrappleRequestRemote:FireServer(point)
+end
+
+-- The hook landed: the rope goes taut and the pull takes over the velocity.
+local function latch(root: BasePart, hum: Humanoid)
+	stopCarry()
 	if hum.FloorMaterial ~= Enum.Material.Air then
 		root.AssemblyLinearVelocity += Vector3.yAxis * Constants.GRAPPLE_START_HOP
 	end
 	hum:ChangeState(Enum.HumanoidStateType.Freefall)
 	pull = makePull(root)
-	GrappleRequestRemote:FireServer(point)
 end
 
 local function tryGrapple()
@@ -152,11 +159,12 @@ local function tryGrapple()
 	if not GrappleMath.validAnchor(root.Position, aimPoint, 0) then return end
 	if (aimPoint - root.Position).Magnitude <= Constants.GRAPPLE_ARRIVE_DISTANCE then return end
 
-	start(root, hum, aimPoint)
+	fire(root, aimPoint)
 end
 
 -- The rope lives while the key is held: down fires it, up lets go. A rope that
--- let go on its own (arrival, stall) needs a new press.
+-- let go on its own (arrival, stall) needs a new press. Letting go before the
+-- hook lands calls it back.
 function GrappleController.setHeld(on: boolean)
 	if on then
 		tryGrapple()
@@ -165,8 +173,9 @@ function GrappleController.setHeld(on: boolean)
 	end
 end
 
+-- True once the hook has landed and the rope is pulling.
 function GrappleController.isGrappling(): boolean
-	return anchor ~= nil
+	return pull ~= nil
 end
 
 -- Something in the way: barely moving for GRAPPLE_STALL_TIME.
@@ -207,7 +216,16 @@ local function step(dt: number)
 	local root = getRoot()
 	local now = os.clock()
 	local elapsed = now - startedAt
-	if not root or not pull or not pull.Parent or not canHold() or elapsed >= Constants.GRAPPLE_MAX_TIME then
+	if not root or not canHold() or elapsed >= Constants.GRAPPLE_MAX_TIME then
+		release(false, true)
+		return
+	end
+	if not pull then
+		local hum = (root.Parent :: Instance):FindFirstChildOfClass("Humanoid")
+		if now < landsAt or not hum then return end
+		latch(root, hum)
+	end
+	if not pull or not pull.Parent then
 		release(false, true)
 		return
 	end
