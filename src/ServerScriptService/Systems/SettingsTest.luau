@@ -19,13 +19,18 @@ return function()
 	assert(changed.keybinds.Shield == Constants.DEFAULT_KEYBINDS.Shield, "untouched action keeps default")
 
 	-- A key name that is not a KeyCode or mouse button, or is reserved, falls back for that action.
-	local bad = Settings.merge({ keybinds = { Shoot = "NotAKey", Dash = "Escape", Aim = "Unknown" } })
+	local bad = Settings.merge({ keybinds = { Shoot = "NotAKey", Slide = "Escape", Aim = "Unknown" } })
 	assert(bad.keybinds.Shoot == Constants.DEFAULT_KEYBINDS.Shoot, "bad key name")
-	assert(bad.keybinds.Dash == Constants.DEFAULT_KEYBINDS.Dash, "escape reserved")
+	assert(bad.keybinds.Slide == Constants.DEFAULT_KEYBINDS.Slide, "escape reserved")
 	assert(bad.keybinds.Aim == Constants.DEFAULT_KEYBINDS.Aim, "unknown reserved")
 
+	-- The dash has no key (it is a double tap of a movement key): a saved one is dropped.
+	local oldSave = Settings.merge({ keybinds = { Dash = "E", Shield = "E" } })
+	assert(oldSave.keybinds.Dash == nil, "saved dash key dropped")
+	assert(oldSave.keybinds.Shield == "E", "the freed key can be bound")
+
 	-- Two actions on one key: the whole set resets rather than guessing.
-	local dupe = Settings.merge({ keybinds = { Shoot = "F", Shield = "F", Dash = "G" } })
+	local dupe = Settings.merge({ keybinds = { Shoot = "F", Shield = "F", Slide = "G" } })
 	for action, key in Constants.DEFAULT_KEYBINDS do
 		assert(dupe.keybinds[action] == key, "duplicate resets " .. action)
 	end

@@ -158,11 +158,12 @@ local function stepAnimations()
 	end
 end
 
--- Plays the dash animation matching the current move direction.
-function MovementController.playDashAnimation()
+-- Plays the dash animation matching the dash's world direction.
+function MovementController.playDashAnimation(direction: Vector3)
 	local hum = getHumanoid()
-	if not hum then return end
-	local move = localMove(hum) or Vector3.zero
+	local root = hum and hum.RootPart
+	if not root then return end
+	local move = root.CFrame:VectorToObjectSpace(direction)
 	local track = dashTracks[MovementBlend.dashTrack(move)]
 	if track then
 		local speed = MovementBlend.fitSpeed(track.Length, Constants.DASH_ANIM_TIME)

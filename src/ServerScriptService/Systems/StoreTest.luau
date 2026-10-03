@@ -56,7 +56,7 @@ return function()
 	-- Settings ride in the record and survive the merge; garbage settings fall back.
 	local withSettings = Store._merge({ settings = { sensitivity = 2, keybinds = { Shoot = "F" } } }, PRICES)
 	assert(withSettings.settings.sensitivity == 2 and withSettings.settings.keybinds.Shoot == "F", "settings merged")
-	assert(withSettings.settings.keybinds.Dash == "E", "settings default filled")
+	assert(withSettings.settings.keybinds.Slide == "C", "settings default filled")
 	assert(fresh.settings.keybinds.Shoot == "MouseButton1", "fresh settings")
 	assert(garbage.settings.sensitivity == 1, "garbage settings")
 

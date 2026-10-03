@@ -18,7 +18,7 @@ local RESERVED = { Escape = true, Unknown = true }
 
 local DIGITS = { Zero = "0", One = "1", Two = "2", Three = "3", Four = "4", Five = "5", Six = "6", Seven = "7", Eight = "8", Nine = "9" }
 
-Settings.ACTIONS = { "Shoot", "Shield", "Dash", "Sprint", "Aim", "Slide", "Grapple" }
+Settings.ACTIONS = { "Shoot", "Shield", "Sprint", "Aim", "Slide", "Grapple" }
 
 function Settings.isKeyName(name: any): boolean
 	if typeof(name) ~= "string" or RESERVED[name] then return false end

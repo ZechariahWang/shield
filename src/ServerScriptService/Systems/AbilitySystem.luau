@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local Abilities = require(ReplicatedStorage.Shared.Abilities)
 local Catalog = require(ReplicatedStorage.Shared.Catalog)
+local DashMath = require(ReplicatedStorage.Shared.DashMath)
 local PlayerState = require(script.Parent.PlayerState)
 local Store = require(script.Parent.Store)
 
@@ -15,7 +16,7 @@ local active = false
 local lastDash: { [Player]: number } = {}
 local DashRequestRemote: RemoteEvent
 
-local function dash(player: Player)
+local function dash(player: Player, direction: any)
 	if not active then return end
 	if PlayerState.get(player) ~= Constants.STATE_SAFE then
 		return
@@ -39,14 +40,10 @@ local function dash(player: Player)
 		return
 	end
 
-	-- Dash the way the player is moving (WASD, replicated via MoveDirection); forward when standing still.
-	local direction = hum.MoveDirection
-	if direction.Magnitude < 0.1 then
-		direction = root.CFrame.LookVector
-	end
-	local horizontal = Vector3.new(direction.X, 0, direction.Z)
-	if horizontal.Magnitude < 0.001 then return end
-	horizontal = horizontal.Unit
+	-- The client names the direction (the movement key it double tapped): the
+	-- replicated MoveDirection can still be a tap behind when the request arrives.
+	local horizontal = DashMath.horizontal(direction)
+	if not horizontal then return end
 
 	lastDash[player] = now
 
@@ -86,9 +83,7 @@ end
 function AbilitySystem.init()
 	DashRequestRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DashRequest") :: RemoteEvent
 
-	DashRequestRemote.OnServerEvent:Connect(function(player)
-		dash(player)
-	end)
+	DashRequestRemote.OnServerEvent:Connect(dash)
 
 	Players.PlayerRemoving:Connect(function(player)
 		lastDash[player] = nil

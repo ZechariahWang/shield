@@ -38,7 +38,7 @@ local listening: string? = nil
 local confirming: string? = nil
 local SettingsUpdateRemote: RemoteEvent
 
-local ROW_LABELS = { Shoot = "SHOOT", Shield = "SHIELD", Dash = "DASH", Sprint = "SPRINT", Aim = "AIM", Slide = "SLIDE", Grapple = "GRAPPLE" }
+local ROW_LABELS = { Shoot = "SHOOT", Shield = "SHIELD", Sprint = "SPRINT", Aim = "AIM", Slide = "SLIDE", Grapple = "GRAPPLE" }
 
 function SettingsController.get(): Settings.Record
 	return record
@@ -155,7 +155,9 @@ local function resolveHints(gameGui: ScreenGui)
 	local meters = actions:WaitForChild("Meters")
 	hints.Shield = meters:WaitForChild("ShieldMeter"):WaitForChild("BarBG"):WaitForChild("KeyHint") :: TextLabel
 	hints.Shoot = meters:WaitForChild("GunMeter"):WaitForChild("BarBG"):WaitForChild("KeyHint") :: TextLabel
-	hints.Dash = actions:WaitForChild("AbilityAction"):WaitForChild("KeyHint") :: TextLabel
+	-- The dash has no key to show: it is a double tap of a movement key.
+	local abilityHint = actions:WaitForChild("AbilityAction"):WaitForChild("KeyHint") :: TextLabel
+	abilityHint.Text = "2X MOVE"
 end
 
 local function buildRow(template: Frame, parent: Instance, label: string, order: number, withSteppers: boolean): Row
