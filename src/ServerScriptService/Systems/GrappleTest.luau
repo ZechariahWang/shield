@@ -114,11 +114,12 @@ return function()
 	assert(GrappleMath.releaseVelocity(Vector3.new(0 / 0, 0, 0)) == Vector3.zero, "nan velocity releases nothing")
 
 	-- Carry after the release: horizontal only, slowly dragging, steered by the movement input.
-	local coasting = GrappleMath.carryVelocity(Vector3.new(100, -50, 0), Vector3.zero, dt)
-	assert(near(coasting.X, 100 * math.exp(-Constants.GRAPPLE_CARRY_DRAG * dt)), "drag slows the carry")
-	assert(coasting.X > 90, "most of the speed survives a step")
+	local carrySpeed = Constants.GRAPPLE_MAX_SPEED / 2
+	local coasting = GrappleMath.carryVelocity(Vector3.new(carrySpeed, -50, 0), Vector3.zero, dt)
+	assert(near(coasting.X, carrySpeed * math.exp(-Constants.GRAPPLE_CARRY_DRAG * dt)), "drag slows the carry")
+	assert(coasting.X > carrySpeed * 0.9, "most of the speed survives a step")
 	assert(near(coasting.Y, 0), "the carry leaves the vertical axis alone")
-	local turned = GrappleMath.carryVelocity(Vector3.new(100, 0, 0), ahead, dt)
+	local turned = GrappleMath.carryVelocity(Vector3.new(carrySpeed, 0, 0), ahead, dt)
 	assert(near(turned.Z, -Constants.GRAPPLE_CARRY_STEER_ACCEL * dt), "movement input steers the carry")
 	local overCap = GrappleMath.carryVelocity(Vector3.new(500, 0, 0), Vector3.zero, dt)
 	assert(overCap.Magnitude <= Constants.GRAPPLE_MAX_SPEED + 1e-4, "carry speed is capped")
