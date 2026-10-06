@@ -14,8 +14,8 @@ local SettingsController = require(script.Parent.SettingsController)
 local ShiftLockController = require(script.Parent.ShiftLockController)
 
 -- Client-side movement extras while combat is active: hold Shift to sprint,
--- hold the Aim key to aim (FOV zoom only), press jump again in the air for a
--- double jump, and press the Slide key while moving on the ground to slide. This
+-- hold the Aim key to aim (FOV zoom only), and press the Slide key while moving
+-- on the ground to slide. This
 -- controller is the only writer of the camera FOV. The local character is
 -- client-simulated, so WalkSpeed is set here and re-applied every frame because
 -- the server rewrites it on shield changes, and the slide drives the root's
@@ -30,9 +30,6 @@ local sprinting = false
 local aiming = false
 local currentFovTarget = Constants.CAMERA_FOV
 local fovTween: Tween? = nil
-
-local canDoubleJump = false
-local doubleJumped = false
 
 local slideTrack: AnimationTrack? = nil
 local slideDirection: Vector3? = nil
@@ -333,39 +330,17 @@ local function step(dt: number)
 	end
 end
 
-local function onJumpRequest()
-	if not CombatController.isCombatActive() then return end
-	if GrappleController.isGrappling() then return end
-	if not canDoubleJump or doubleJumped then return end
-	local hum = getHumanoid()
-	if not hum or hum:GetState() ~= Enum.HumanoidStateType.Freefall then return end
-	doubleJumped = true
-	hum:ChangeState(Enum.HumanoidStateType.Jumping)
-end
-
 local function bindCharacter(char: Model)
 	local hum = char:WaitForChild("Humanoid", 5)
 	if not hum or not hum:IsA("Humanoid") then return end
-	canDoubleJump = false
-	doubleJumped = false
 	slideDirection = nil
 	task.spawn(bindAnimations, hum) -- preloading yields; the state wiring below must not wait on it
 	hum.StateChanged:Connect(function(_old, new)
-		if new == Enum.HumanoidStateType.Landed then
-			canDoubleJump = false
-			doubleJumped = false
-		elseif new == Enum.HumanoidStateType.Jumping then
+		if new == Enum.HumanoidStateType.Jumping then
 			endSlide()
 			if jumpTrack then
 				jumpTrack:Play()
 			end
-		elseif new == Enum.HumanoidStateType.Freefall then
-			-- Wait a beat so the first jump's own Freefall doesn't immediately count as airborne.
-			task.delay(Constants.DOUBLE_JUMP_DELAY, function()
-				if hum:GetState() == Enum.HumanoidStateType.Freefall then
-					canDoubleJump = true
-				end
-			end)
 		end
 	end)
 end
@@ -405,8 +380,6 @@ function MovementController.init()
 			aimHeld = false
 		end
 	end)
-	UserInputService.JumpRequest:Connect(onJumpRequest)
-
 	localPlayer.CharacterAdded:Connect(bindCharacter)
 	if localPlayer.Character then
 		bindCharacter(localPlayer.Character)

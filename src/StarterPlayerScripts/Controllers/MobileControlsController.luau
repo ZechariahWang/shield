@@ -71,9 +71,7 @@ function MobileControlsController.init()
 
 	button("Shoot").Activated:Connect(CombatController.tryShoot)
 	button("Shield").Activated:Connect(CombatController.tryToggleShield)
-	dashButton.Activated:Connect(function()
-		DashController.tryDash()
-	end)
+	dashButton.Activated:Connect(DashController.tryDash)
 	bindToggle(button("Sprint"), MovementController.setSprintHeld)
 	bindToggle(button("Aim"), MovementController.setAimHeld)
 

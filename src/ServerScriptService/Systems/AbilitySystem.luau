@@ -40,10 +40,9 @@ local function dash(player: Player, direction: any)
 		return
 	end
 
-	-- The client names the direction (the movement key it double tapped): the
-	-- replicated MoveDirection can still be a tap behind when the request arrives.
-	local horizontal = DashMath.horizontal(direction)
-	if not horizontal then return end
+	-- The client names the direction: where its crosshair points, up or down included.
+	local unit = DashMath.unit(direction)
+	if not unit then return end
 
 	lastDash[player] = now
 
@@ -51,17 +50,16 @@ local function dash(player: Player, direction: any)
 	attachment.Name = "DashAttachment"
 	attachment.Parent = root
 
-	-- Horizontal plane only, with a finite force: gravity still applies and a wall
-	-- stops the dash instead of the solver launching the character off it.
+	-- All three axes, so the dash holds its line against gravity. The force is
+	-- finite: a wall or the floor stops the dash instead of the solver launching
+	-- the character off it.
 	local lv = Instance.new("LinearVelocity")
 	lv.Name = "DashVelocity"
 	lv.Attachment0 = attachment
 	lv.RelativeTo = Enum.ActuatorRelativeTo.World
-	lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
-	lv.PrimaryTangentAxis = Vector3.xAxis
-	lv.SecondaryTangentAxis = Vector3.zAxis
+	lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
 	lv.MaxForce = root.AssemblyMass * Constants.PUSH_MAX_ACCEL
-	lv.PlaneVelocity = Vector2.new(horizontal.X, horizontal.Z) * (params.velocity or 0)
+	lv.VectorVelocity = unit * (params.velocity or 0)
 	lv.Parent = root
 
 	task.delay(params.duration or 0, function()

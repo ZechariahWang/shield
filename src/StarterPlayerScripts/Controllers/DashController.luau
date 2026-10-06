@@ -1,16 +1,16 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Constants = require(ReplicatedStorage.Shared.Constants)
 local Abilities = require(ReplicatedStorage.Shared.Abilities)
 local DashMath = require(ReplicatedStorage.Shared.DashMath)
 local AbilityHUDController = require(script.Parent.AbilityHUDController)
+local CombatController = require(script.Parent.CombatController)
 local MovementController = require(script.Parent.MovementController)
 
--- The dash has no key of its own: tapping a movement key twice inside
--- DASH_DOUBLE_TAP_WINDOW dashes to that key's side of the camera.
+-- The dash has no key of its own: tapping Space twice inside
+-- DASH_DOUBLE_TAP_WINDOW dashes toward the crosshair, up or down included.
 local DashController = {}
 
 local DASH = "Dash"
@@ -23,58 +23,44 @@ local RoundStateRemote: RemoteEvent
 local localState: string = Constants.STATE_LOBBY
 local currentPhase: string = Constants.PHASE_LOBBY
 local lastDash = 0
-local lastTapKey: string? = nil
-local lastTapAt = 0
+local lastTapAt = -math.huge
 
 local function canDash(): boolean
 	if currentPhase ~= Constants.PHASE_ROUND then return false end
 	return localState == Constants.STATE_SAFE
 end
 
--- The way the character is moving, or facing when it stands still.
-local function moveDirection(): Vector3?
+-- From the character toward what the crosshair is over.
+local function aimDirection(): Vector3?
 	local char = localPlayer.Character
-	local hum = char and char:FindFirstChildOfClass("Humanoid")
-	local root = hum and hum.RootPart
-	if not hum or not root then return nil end
-	if hum.MoveDirection.Magnitude >= 0.1 then
-		return DashMath.horizontal(hum.MoveDirection)
-	end
-	return DashMath.horizontal(root.CFrame.LookVector)
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not root then return nil end
+	local direction = CombatController.getAim(root.Position)
+	return direction
 end
 
--- `direction` is the level unit vector to dash along; without one (the touch
--- button) the dash follows the movement input.
-function DashController.tryDash(direction: Vector3?)
+function DashController.tryDash()
 	if not canDash() then return end
-	direction = direction or moveDirection()
-	if not direction then return end
 	-- Only Dash has behavior; the key does nothing with another ability equipped.
 	if AbilityHUDController.equippedAbility() ~= DASH then return end
 	local now = os.clock()
 	if now - lastDash < Abilities.params(DASH).cooldown then return end
+	local direction = aimDirection()
+	if not direction then return end
 	lastDash = now
 	DashRequestRemote:FireServer(direction)
 	MovementController.playDashAnimation(direction)
 	AbilityHUDController.triggerCooldown(DASH)
 end
 
-local function onKey(keyName: string)
-	local side = DashMath.side(keyName)
-	if not side then return end
+local function onSpace()
 	local now = os.clock()
-	local doubleTap = DashMath.isDoubleTap(lastTapKey, lastTapAt, keyName, now)
-	lastTapKey = keyName
+	local doubleTap = DashMath.isDoubleTap(lastTapAt, now)
 	lastTapAt = now
 	if not doubleTap then return end
 	-- A third tap starts over instead of chaining off the second.
-	lastTapKey = nil
-	local camera = Workspace.CurrentCamera
-	if not camera then return end
-	local direction = DashMath.direction(side, camera.CFrame.LookVector)
-	if direction then
-		DashController.tryDash(direction)
-	end
+	lastTapAt = -math.huge
+	DashController.tryDash()
 end
 
 function DashController.init()
@@ -99,7 +85,9 @@ function DashController.init()
 
 	UserInputService.InputBegan:Connect(function(input, gpe)
 		if gpe then return end
-		onKey(input.KeyCode.Name)
+		if input.KeyCode == Enum.KeyCode.Space then
+			onSpace()
+		end
 	end)
 end
 
