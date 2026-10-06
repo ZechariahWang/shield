@@ -121,8 +121,8 @@ Constants.DASH_ANIMATIONS = {                 -- one-shot Action priority, picke
 	Backward = "rbxassetid://132347250678738",
 }
 Constants.SLIDE_ANIMATION = "rbxassetid://88454254966714" -- one-shot Action priority for the slide, stopped when the slide ends
-Constants.SLIDE_SPEED = 34                    -- studs per second at the start of a slide, easing down to SAFE_WALKSPEED
-Constants.SLIDE_DURATION = 0.7                -- seconds a slide carries the character
+Constants.SLIDE_SPEED = 44                    -- studs per second at the start of a slide, easing down to SAFE_WALKSPEED
+Constants.SLIDE_DURATION = 0.9                -- seconds a slide carries the character
 Constants.SLIDE_COOLDOWN = 1.0                -- seconds between slides
 Constants.SLIDE_CAMERA_DROP = 1.5             -- studs the camera sinks while sliding
 Constants.SLIDE_CAMERA_DROP_TIME = 0.12       -- seconds to sink the full drop, and to rise back
